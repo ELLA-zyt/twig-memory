@@ -1,0 +1,88 @@
+import { useEffect, useRef, useState } from 'react'
+import ChatPane from '../components/ChatPane'
+import ClosureOverlay from '../components/ClosureOverlay'
+import DemoTimeline from '../components/DemoTimeline'
+import ImportOverlay from '../components/ImportOverlay'
+import MemoryPanel, { type MemTab } from '../components/MemoryPanel'
+import { DEMO_STEPS } from '../engine/demoScript'
+import type { DemoKey } from '../engine/types'
+import { useEngine } from '../state/EngineContext'
+
+export default function DemoPage() {
+  const { engine, state } = useEngine()
+  const [activeStep, setActiveStep] = useState<DemoKey>('contrast')
+  const [showImport, setShowImport] = useState(false)
+  const [memTab, setMemTab] = useState<MemTab>('threads')
+  const [hlFrag, setHlFrag] = useState<string | null>(null)
+  const [showClosure, setShowClosure] = useState(false)
+  const lastClosure = useRef(0)
+
+  // 步骤完成 → 自动推进到下一未完成的节点；伏笔回收 → 显影浮层
+  // （在引擎订阅回调中更新，避免渲染级联）
+  useEffect(() => engine.subscribe(() => {
+    const s = engine.getState()
+    setActiveStep((cur) => {
+      if (!s.completedSteps.includes(cur)) return cur
+      return DEMO_STEPS.find((d) => !s.completedSteps.includes(d.key))?.key ?? cur
+    })
+    if (s.closureFlash > lastClosure.current) {
+      lastClosure.current = s.closureFlash
+      setShowClosure(true)
+    }
+  }), [engine])
+
+  const handleSelectStep = (k: DemoKey) => {
+    setActiveStep(k)
+    if (k === 'import' && !state.completedSteps.includes('import')) setShowImport(true)
+  }
+
+  const locateFragment = (id: string) => {
+    setHlFrag(id)
+    setMemTab('fragments')
+    setTimeout(() => document.getElementById(`frag-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      <DemoTimeline active={activeStep} completed={state.completedSteps} onSelect={handleSelectStep} />
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12">
+        <div className="lg:col-span-7 min-h-0 border-b lg:border-b-0 border-[hsl(var(--gold)/0.25)]">
+          <ChatPane
+            chat={state.chat}
+            busy={state.busy}
+            activeStep={activeStep}
+            completedSteps={state.completedSteps}
+            onContrast={() => engine.runContrast()}
+            onCounter={(t) => engine.runCounter(t)}
+            onClosure={(t) => engine.runClosure(t)}
+            onFinale={() => engine.runFinale()}
+            onEvidence={() => { engine.runEvidence(); setMemTab('claims') }}
+            onShowImport={() => setShowImport(true)}
+            onFree={(t) => engine.ingestFree(t)}
+          />
+        </div>
+        <div className="lg:col-span-5 min-h-0">
+          <MemoryPanel
+            tab={memTab}
+            onTab={setMemTab}
+            threads={state.threads}
+            claims={state.claims}
+            fragments={state.fragments}
+            logs={state.logs}
+            flashIds={state.flashIds}
+            highlightFragmentId={hlFrag}
+            onLocateFragment={locateFragment}
+          />
+        </div>
+      </div>
+
+      {showImport && (
+        <ImportOverlay
+          lines={engine.getImportLogLines()}
+          onDone={() => { engine.finishImport(); setShowImport(false) }}
+        />
+      )}
+      {showClosure && <ClosureOverlay onClose={() => setShowClosure(false)} />}
+    </div>
+  )
+}
