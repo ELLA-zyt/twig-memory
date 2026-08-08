@@ -1,0 +1,533 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 默认：衔枝 Twig · 穆夏新艺术主题 —— 米白羊皮纸 + 苔绿鎏金 */
+    --parchment: 42 33% 89%;
+    --background: 42 33% 89%;
+    --foreground: 158 20% 17%;
+    --card: 44 38% 93%;
+    --card-foreground: 158 20% 17%;
+    --popover: 44 38% 95%;
+    --popover-foreground: 158 20% 17%;
+    --primary: 152 30% 30%;
+    --primary-foreground: 44 40% 92%;
+    --secondary: 40 24% 84%;
+    --secondary-foreground: 158 18% 24%;
+    --muted: 40 20% 86%;
+    --muted-foreground: 95 9% 40%;
+    --accent: 152 24% 87%;
+    --accent-foreground: 152 30% 26%;
+    --destructive: 12 48% 44%;
+    --destructive-foreground: 20 30% 92%;
+    --border: 38 18% 66%;
+    --input: 38 18% 66%;
+    --ring: 38 52% 42%;
+    --radius: 0.75rem;
+
+    /* 松绿：侧边栏 / 深色画板 */
+    --pine: 158 28% 15%;
+    --pine-deep: 160 30% 10%;
+    --sidebar-background: 158 28% 14%;
+    --sidebar-foreground: 44 28% 82%;
+    --sidebar-primary: 38 52% 55%;
+    --sidebar-primary-foreground: 160 30% 10%;
+    --sidebar-accent: 156 22% 20%;
+    --sidebar-accent-foreground: 44 30% 88%;
+    --sidebar-border: 156 20% 24%;
+    --sidebar-ring: 38 52% 55%;
+
+    /* 自定义语义色 */
+    --raven: 152 30% 30%;        /* 线索 / 活动 */
+    --cinnabar: 12 48% 46%;      /* 冲突 / 反证 */
+    --gold: 38 54% 42%;          /* 认识层 / 置信 */
+    --fog: 95 9% 42%;            /* 次级文本 */
+    --vein: 152 30% 30%;
+  }
+
+  /* ============================================================
+     全局主题：由侧边栏「主题」选择器切换
+     ============================================================ */
+
+  /* 榴子红 · 暖粉珊瑚 */
+  [data-theme="liuzihong"] {
+    --parchment: 15 35% 92%;
+    --background: 15 35% 92%;
+    --foreground: 8 24% 16%;
+    --card: 18 42% 94%;
+    --card-foreground: 8 24% 16%;
+    --popover: 18 44% 95%;
+    --popover-foreground: 8 24% 16%;
+    --primary: 2 80% 72%;
+    --primary-foreground: 0 0% 99%;
+    --secondary: 18 30% 85%;
+    --secondary-foreground: 8 24% 18%;
+    --muted: 18 32% 87%;
+    --muted-foreground: 10 12% 42%;
+    --accent: 2 55% 90%;
+    --accent-foreground: 2 45% 28%;
+    --destructive: 352 55% 52%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 15 24% 75%;
+    --input: 15 24% 75%;
+    --ring: 10 70% 60%;
+    --pine: 6 42% 15%;
+    --pine-deep: 8 48% 11%;
+    --sidebar-background: 6 44% 13%;
+    --sidebar-foreground: 18 30% 84%;
+    --sidebar-primary: 20 65% 60%;
+    --sidebar-primary-foreground: 6 45% 11%;
+    --sidebar-accent: 10 35% 22%;
+    --sidebar-accent-foreground: 18 30% 88%;
+    --sidebar-border: 10 35% 25%;
+    --sidebar-ring: 20 65% 60%;
+    --raven: 2 58% 45%;
+    --cinnabar: 350 55% 54%;
+    --gold: 28 60% 55%;
+    --fog: 12 14% 45%;
+    --vein: 2 58% 45%;
+  }
+
+  /* 涧石蓝 · 山涧石头的蓝 */
+  [data-theme="jianshilan"] {
+    --parchment: 200 35% 92%;
+    --background: 200 35% 92%;
+    --foreground: 205 25% 16%;
+    --card: 204 40% 95%;
+    --card-foreground: 205 25% 16%;
+    --popover: 204 42% 96%;
+    --popover-foreground: 205 25% 16%;
+    --primary: 199 55% 60%;
+    --primary-foreground: 0 0% 99%;
+    --secondary: 205 28% 86%;
+    --secondary-foreground: 205 25% 18%;
+    --muted: 205 28% 88%;
+    --muted-foreground: 205 12% 42%;
+    --accent: 199 45% 90%;
+    --accent-foreground: 200 45% 26%;
+    --destructive: 350 50% 56%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 202 22% 76%;
+    --input: 202 22% 76%;
+    --ring: 200 65% 55%;
+    --pine: 205 35% 16%;
+    --pine-deep: 207 40% 12%;
+    --sidebar-background: 205 38% 14%;
+    --sidebar-foreground: 205 28% 85%;
+    --sidebar-primary: 30 55% 60%;
+    --sidebar-primary-foreground: 205 38% 12%;
+    --sidebar-accent: 205 25% 22%;
+    --sidebar-accent-foreground: 205 30% 89%;
+    --sidebar-border: 205 25% 25%;
+    --sidebar-ring: 30 55% 60%;
+    --raven: 201 50% 42%;
+    --cinnabar: 350 50% 56%;
+    --gold: 38 55% 52%;
+    --fog: 205 12% 45%;
+    --vein: 201 50% 42%;
+  }
+
+  /* 薄青 · 日本传统淡青绿 */
+  [data-theme="usuaao"] {
+    --parchment: 120 28% 92%;
+    --background: 120 28% 92%;
+    --foreground: 130 25% 15%;
+    --card: 122 32% 94%;
+    --card-foreground: 130 25% 15%;
+    --popover: 122 34% 95%;
+    --popover-foreground: 130 25% 15%;
+    --primary: 121 32% 65%;
+    --primary-foreground: 0 0% 99%;
+    --secondary: 125 25% 85%;
+    --secondary-foreground: 130 25% 16%;
+    --muted: 125 25% 88%;
+    --muted-foreground: 120 10% 42%;
+    --accent: 120 30% 87%;
+    --accent-foreground: 130 35% 25%;
+    --destructive: 350 50% 56%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 125 20% 76%;
+    --input: 125 20% 76%;
+    --ring: 125 45% 55%;
+    --pine: 130 35% 14%;
+    --pine-deep: 132 40% 11%;
+    --sidebar-background: 130 38% 12%;
+    --sidebar-foreground: 125 28% 85%;
+    --sidebar-primary: 40 55% 56%;
+    --sidebar-primary-foreground: 130 40% 10%;
+    --sidebar-accent: 130 25% 22%;
+    --sidebar-accent-foreground: 125 30% 88%;
+    --sidebar-border: 130 25% 25%;
+    --sidebar-ring: 40 55% 56%;
+    --raven: 128 35% 42%;
+    --cinnabar: 350 50% 55%;
+    --gold: 38 55% 52%;
+    --fog: 120 12% 44%;
+    --vein: 128 35% 42%;
+  }
+
+  /* 白群 · 最浅的群青 */
+  [data-theme="byakugun"] {
+    --parchment: 180 30% 92%;
+    --background: 180 30% 92%;
+    --foreground: 185 25% 16%;
+    --card: 182 36% 94%;
+    --card-foreground: 185 25% 16%;
+    --popover: 182 38% 95%;
+    --popover-foreground: 185 25% 16%;
+    --primary: 181 42% 60%;
+    --primary-foreground: 0 0% 99%;
+    --secondary: 185 25% 86%;
+    --secondary-foreground: 185 25% 17%;
+    --muted: 185 25% 88%;
+    --muted-foreground: 185 10% 42%;
+    --accent: 181 35% 89%;
+    --accent-foreground: 185 40% 26%;
+    --destructive: 350 50% 56%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 185 22% 76%;
+    --input: 185 22% 76%;
+    --ring: 185 55% 55%;
+    --pine: 185 35% 16%;
+    --pine-deep: 187 40% 12%;
+    --sidebar-background: 185 38% 14%;
+    --sidebar-foreground: 185 28% 85%;
+    --sidebar-primary: 35 60% 59%;
+    --sidebar-primary-foreground: 185 40% 12%;
+    --sidebar-accent: 185 25% 22%;
+    --sidebar-accent-foreground: 185 30% 89%;
+    --sidebar-border: 185 25% 25%;
+    --sidebar-ring: 35 60% 59%;
+    --raven: 183 48% 43%;
+    --cinnabar: 350 50% 56%;
+    --gold: 38 55% 53%;
+    --fog: 185 12% 45%;
+    --vein: 183 48% 43%;
+  }
+
+  /* 楝 · 淡紫 */
+  [data-theme="ouchi"] {
+    --parchment: 255 30% 93%;
+    --background: 255 30% 93%;
+    --foreground: 255 25% 18%;
+    --card: 257 34% 94%;
+    --card-foreground: 255 25% 18%;
+    --popover: 257 36% 95%;
+    --popover-foreground: 255 25% 18%;
+    --primary: 252 32% 67%;
+    --primary-foreground: 0 0% 99%;
+    --secondary: 255 25% 86%;
+    --secondary-foreground: 255 25% 19%;
+    --muted: 255 25% 88%;
+    --muted-foreground: 255 12% 44%;
+    --accent: 252 30% 90%;
+    --accent-foreground: 255 35% 26%;
+    --destructive: 340 52% 56%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 255 20% 77%;
+    --input: 255 20% 77%;
+    --ring: 255 50% 62%;
+    --pine: 255 35% 16%;
+    --pine-deep: 257 40% 12%;
+    --sidebar-background: 255 38% 14%;
+    --sidebar-foreground: 255 28% 86%;
+    --sidebar-primary: 40 52% 60%;
+    --sidebar-primary-foreground: 255 40% 12%;
+    --sidebar-accent: 255 25% 22%;
+    --sidebar-accent-foreground: 255 30% 90%;
+    --sidebar-border: 255 25% 25%;
+    --sidebar-ring: 40 52% 60%;
+    --raven: 253 35% 46%;
+    --cinnabar: 340 52% 56%;
+    --gold: 38 52% 54%;
+    --fog: 255 12% 46%;
+    --vein: 253 35% 46%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    /* 主题切换时背景色平滑过渡（只过渡颜色，避免影响动画） */
+    transition: background-color 0.45s ease, color 0.35s ease;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Noto Serif SC", "Songti SC", "STSong", "STKaiti", KaiTi, "Noto Sans SC", serif;
+    font-feature-settings: "tnum";
+    /* 羊皮纸肌理：细颗粒 + 纸面晕 */
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.24 0 0 0 0 0.20 0 0 0 0 0.12 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"),
+      radial-gradient(120% 90% at 50% 0%, hsl(var(--card) / 0.92), transparent 60%),
+      radial-gradient(150% 120% at 50% 115%, hsl(var(--border) / 0.5), transparent 55%);
+    background-attachment: fixed;
+    transition: background-color 0.45s ease, color 0.35s ease;
+  }
+  ::selection {
+    background: hsl(var(--gold) / 0.28);
+  }
+}
+
+/* ---------- 滚动条 ---------- */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--fog) / 0.7);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- 动效 ---------- */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(1.7) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(0.94) rotate(-10deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-11deg); }
+}
+@keyframes pulse-line {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; opacity: 0; }
+}
+@keyframes flash-new {
+  0% { box-shadow: 0 0 0 0 hsl(var(--raven) / 0.45); }
+  100% { box-shadow: 0 0 0 14px hsl(var(--raven) / 0); }
+}
+@keyframes flash-warn {
+  0% { box-shadow: 0 0 0 0 hsl(var(--cinnabar) / 0.45); }
+  100% { box-shadow: 0 0 0 14px hsl(var(--cinnabar) / 0); }
+}
+
+.anim-rise { animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-fade { animation: fade-in 0.5s ease both; }
+.anim-stamp { animation: stamp-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-flash { animation: flash-new 1.1s ease-out 2; }
+.anim-flash-warn { animation: flash-warn 1.1s ease-out 2; }
+
+.typing-dots span {
+  display: inline-block;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: hsl(var(--fog));
+  margin-right: 3px;
+  animation: pulse-line 1.2s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+/* 竖排印章 */
+.seal-vertical {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.18em;
+}
+
+/* 虚线龙脉 */
+.vein-dash {
+  background-image: linear-gradient(90deg, hsl(var(--raven) / 0.55) 55%, transparent 45%);
+  background-size: 8px 1px;
+  background-repeat: repeat-x;
+}
+
+/* 极淡圆点纹（替代旧网格） */
+.bg-grid-faint {
+  background-image: radial-gradient(hsl(var(--foreground) / 0.10) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+/* 描线动画元素 */
+.draw-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.draw-path.drawn {
+  stroke-dashoffset: 0;
+}
+
+/* 光标 */
+.caret::after {
+  content: "▍";
+  animation: blink-cursor 1s step-end infinite;
+  color: hsl(var(--raven));
+}
+
+/* ============================================================
+   新艺术（Mucha）装饰系统
+   ============================================================ */
+
+/* 画框卡 */
+.nv-card {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--gold) / 0.38);
+  background: hsl(var(--card));
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--card) / 0.65),
+    0 14px 34px -22px hsl(var(--foreground) / 0.18);
+  transition: background-color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+/* 内缩发丝框 */
+.nv-card-double::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid hsl(var(--gold) / 0.22);
+  border-radius: calc(1rem - 5px);
+  pointer-events: none;
+}
+
+/* 深画板 */
+.nv-dark {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--gold) / 0.4);
+  background:
+    radial-gradient(120% 140% at 80% -10%, hsl(var(--raven) / 0.85), hsl(var(--pine-deep) / 0.98) 62%);
+  color: hsl(var(--sidebar-foreground));
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--card) / 0.08),
+    0 16px 36px -22px hsl(var(--foreground) / 0.2);
+  transition: background-color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+.nv-dark-double::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid hsl(var(--gold) / 0.25);
+  border-radius: calc(1rem - 5px);
+  pointer-events: none;
+}
+
+/* 拱形画幅 */
+.nv-arch {
+  border-radius: 999px 999px 1rem 1rem / 320px 320px 1rem 1rem;
+}
+.nv-arch-double::before {
+  border-radius: 999px 999px 1rem 1rem / 315px 315px calc(1rem - 5px) calc(1rem - 5px);
+}
+
+/* 描金胶囊 */
+.nv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--gold) / 0.45);
+  padding: 0.25rem 0.75rem;
+  font-size: 11px;
+  line-height: 1.4;
+  color: hsl(var(--foreground) / 0.92);
+  background: hsl(var(--card) / 0.75);
+  transition: background-color 0.4s ease, border-color 0.4s ease, color 0.3s ease;
+}
+.nv-chip-gold {
+  border-color: hsl(var(--gold) / 0.6);
+  color: hsl(var(--gold));
+  background: hsl(var(--gold) / 0.1);
+}
+.nv-chip-solid {
+  border-color: transparent;
+  background: hsl(var(--raven));
+  color: hsl(var(--card) / 0.95);
+}
+
+/* 输入框 */
+.nv-input {
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--card) / 0.85);
+  box-shadow: inset 0 1px 3px hsl(var(--foreground) / 0.06);
+  outline: none;
+  transition: background-color 0.35s ease, border-color 0.2s, box-shadow 0.2s;
+}
+.nv-input:focus {
+  border-color: hsl(var(--gold) / 0.7);
+  box-shadow: inset 0 1px 3px hsl(var(--foreground) / 0.06), 0 0 0 3px hsl(var(--gold) / 0.15);
+}
+.nv-input::placeholder {
+  color: hsl(var(--fog) / 0.7);
+}
+
+/* 描金按钮 */
+.nv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--raven) / 0.55);
+  color: hsl(var(--raven));
+  background: hsl(var(--card) / 0.65);
+  transition: all 0.2s;
+}
+.nv-btn:hover:not(:disabled) {
+  background: hsl(var(--raven) / 0.1);
+  border-color: hsl(var(--raven) / 0.8);
+}
+.nv-btn:disabled {
+  opacity: 0.4;
+}
+.nv-btn-gold {
+  border-color: hsl(var(--gold) / 0.6);
+  color: hsl(var(--gold));
+}
+.nv-btn-gold:hover:not(:disabled) {
+  background: hsl(var(--gold) / 0.12);
+  border-color: hsl(var(--gold) / 0.85);
+}
+.nv-btn-cinnabar {
+  border-color: hsl(var(--cinnabar) / 0.55);
+  color: hsl(var(--cinnabar));
+}
+.nv-btn-cinnabar:hover:not(:disabled) {
+  background: hsl(var(--cinnabar) / 0.1);
+  border-color: hsl(var(--cinnabar) / 0.8);
+}
+
+/* 删除线注记（过去理解） */
+.nv-strike {
+  text-decoration: line-through;
+  text-decoration-color: hsl(var(--cinnabar) / 0.55);
+  text-decoration-thickness: 1px;
+}
+
+/* 渐变描金计量条 */
+.nv-meter {
+  height: 5px;
+  border-radius: 999px;
+  background: hsl(var(--border) / 0.7);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px hsl(var(--foreground) / 0.06);
+}
+.nv-meter > div {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(var(--raven) / 0.75), hsl(var(--raven)));
+}
+.nv-meter-gold > div {
+  background: linear-gradient(90deg, hsl(var(--gold) / 0.75), hsl(var(--gold)));
+}
