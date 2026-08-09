@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node --import tsx server/http.ts",
+    "server:http": "tsx server/http.ts",
+    "server:mcp": "tsx server/mcp.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -59,6 +62,8 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "tsx": "^4.20.0",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
