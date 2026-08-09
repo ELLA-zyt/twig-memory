@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 叙事记忆引擎持久化数据（按用户隔离，不应入库）
+server/data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
