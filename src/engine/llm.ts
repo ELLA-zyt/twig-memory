@@ -9,7 +9,17 @@ const MODEL = 'moonshot-v1-8k'
 
 export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
 
+/** 可注入的聊天传输层：服务端（Node 直连）注入自定义实现；前端不注入时走 vite 代理，行为完全不变 */
+export type ChatTransport = (messages: ChatMessage[], opts?: { temperature?: number; maxTokens?: number }) => Promise<string>
+
+let customTransport: ChatTransport | null = null
+
+export function setChatTransport(t: ChatTransport | null): void {
+  customTransport = t
+}
+
 export async function moonshotChat(messages: ChatMessage[], opts?: { temperature?: number; maxTokens?: number }): Promise<string> {
+  if (customTransport) return customTransport(messages, opts)
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
