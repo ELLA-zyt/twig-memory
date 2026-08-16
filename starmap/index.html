@@ -686,8 +686,17 @@
   }
 
   // ========== 数据加载 ==========
+  var API_BASE = 'https://yubai-memory.zeabur.app';
+  var AUTH_TOKEN = 'zyt_123456_abc';
+  var DEFAULT_USER_ID = 'muqiu';
+
   function loadData() {
-    fetch('/v1/state')
+    var url = API_BASE + '/v1/state?userId=' + encodeURIComponent(DEFAULT_USER_ID);
+    fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + AUTH_TOKEN
+      }
+    })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
