@@ -5,7 +5,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts
 
 # 服务端只依赖 src/engine（类型 + LLM 判定函数），不拷贝整个前端
 COPY src/engine ./src/engine
