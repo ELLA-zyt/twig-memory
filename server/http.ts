@@ -160,6 +160,6 @@ const server = createServer(async (req, res) => {
   }
 })
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`[muninn] HTTP ready: http://localhost:${PORT} (llm: ${llmReady ? 'live' : 'heuristic-only'}, auth: ${AUTH_TOKEN ? 'on' : 'off'})`)
 })
