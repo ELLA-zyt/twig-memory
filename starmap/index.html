@@ -5,293 +5,75 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>记忆星空 · Twig Starmap</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  
-  html, body {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #0a0a1a;
-    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    color: #fff;
-  }
-
-  #starfield {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-  }
-
-  .nebula {
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.4;
-    z-index: 0;
-    pointer-events: none;
-  }
-  .nebula-1 {
-    width: 600px; height: 600px;
-    background: radial-gradient(circle, rgba(138, 99, 210, 0.6) 0%, transparent 70%);
-    top: -100px; left: -100px;
-    animation: drift1 30s ease-in-out infinite;
-  }
-  .nebula-2 {
-    width: 500px; height: 500px;
-    background: radial-gradient(circle, rgba(79, 156, 210, 0.5) 0%, transparent 70%);
-    bottom: -50px; right: -50px;
-    animation: drift2 25s ease-in-out infinite;
-  }
-  .nebula-3 {
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, rgba(210, 140, 180, 0.4) 0%, transparent 70%);
-    top: 40%; left: 60%;
-    animation: drift3 35s ease-in-out infinite;
-  }
-
-  @keyframes drift1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(80px, 60px) scale(1.1); }
-  }
-  @keyframes drift2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-60px, -40px) scale(0.95); }
-  }
-  @keyframes drift3 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-50px, 50px) scale(1.05); }
-  }
-
-  .header {
-    position: fixed;
-    top: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    text-align: center;
-    pointer-events: none;
-  }
-  .header h1 {
-    font-size: 28px;
-    font-weight: 300;
-    letter-spacing: 8px;
-    background: linear-gradient(135deg, #c9b8ff 0%, #8ecae6 50%, #ffb8d9 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: 0 0 40px rgba(180, 160, 255, 0.3);
-  }
-  .header p {
-    margin-top: 8px;
-    font-size: 13px;
-    letter-spacing: 3px;
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .stats {
-    position: fixed;
-    top: 30px;
-    right: 30px;
-    z-index: 10;
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 16px 20px;
-    min-width: 140px;
-  }
-  .stats-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .stats-item:last-child { margin-bottom: 0; }
-  .stats-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .stats-dot.fragment { background: #a8d8ff; box-shadow: 0 0 6px #a8d8ff; }
-  .stats-dot.thread { background: #c9b8ff; box-shadow: 0 0 6px #c9b8ff; }
-  .stats-dot.claim { background: #ffd6a5; box-shadow: 0 0 8px #ffd6a5; }
-  .stats-label {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-    flex: 1;
-  }
-  .stats-value {
-    font-size: 16px;
-    font-weight: 500;
-    color: #fff;
-  }
-
-  .footer {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  .footer input {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 10px 18px;
-    color: #fff;
-    font-size: 13px;
-    width: 200px;
-    outline: none;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s;
-  }
-  .footer input:focus {
-    border-color: rgba(180, 160, 255, 0.5);
-    box-shadow: 0 0 20px rgba(180, 160, 255, 0.15);
-  }
-  .footer input::placeholder { color: rgba(255, 255, 255, 0.3); }
-  .footer button {
-    background: linear-gradient(135deg, rgba(138, 99, 210, 0.6), rgba(79, 156, 210, 0.6));
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    padding: 10px 20px;
-    color: #fff;
-    font-size: 13px;
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s;
-  }
-  .footer button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(138, 99, 210, 0.4);
-  }
-
-  .star-info {
-    position: fixed;
-    z-index: 20;
-    max-width: 320px;
-    background: rgba(20, 18, 40, 0.85);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 14px;
-    padding: 16px 18px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: rgba(255, 255, 255, 0.85);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  }
-  .star-info.visible { opacity: 1; }
-  .star-info .tag {
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-    font-weight: 500;
-  }
-  .star-info .tag.fragment { background: rgba(168, 216, 255, 0.2); color: #a8d8ff; }
-  .star-info .tag.thread { background: rgba(201, 184, 255, 0.2); color: #c9b8ff; }
-  .star-info .tag.claim { background: rgba(255, 214, 165, 0.2); color: #ffd6a5; }
-  .star-info .content {
-    word-break: break-word;
-    max-height: 180px;
-    overflow-y: auto;
-  }
-  .star-info .time {
-    margin-top: 8px;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
-  }
-
-  .loading {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 30;
-    text-align: center;
-    transition: opacity 0.5s;
-  }
-  .loading.hidden { opacity: 0; pointer-events: none; }
-  .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: #c9b8ff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 16px;
-  }
-  .loading p {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
-    letter-spacing: 2px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .shooting-star {
-    position: fixed;
-    width: 2px;
-    height: 2px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.6);
-    z-index: 2;
-    pointer-events: none;
-  }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a1a; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #fff; }
+#starfield { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+.nebula { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.4; z-index: 0; pointer-events: none; }
+.nebula-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(138, 99, 210, 0.6) 0%, transparent 70%); top: -100px; left: -100px; animation: drift1 30s ease-in-out infinite; }
+.nebula-2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(79, 156, 210, 0.5) 0%, transparent 70%); bottom: -50px; right: -50px; animation: drift2 25s ease-in-out infinite; }
+.nebula-3 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(210, 140, 180, 0.4) 0%, transparent 70%); top: 40%; left: 60%; animation: drift3 35s ease-in-out infinite; }
+@keyframes drift1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(80px, 60px) scale(1.1); } }
+@keyframes drift2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-60px, -40px) scale(0.95); } }
+@keyframes drift3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-50px, 50px) scale(1.05); } }
+.header { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); z-index: 10; text-align: center; pointer-events: none; }
+.header h1 { font-size: 28px; font-weight: 300; letter-spacing: 8px; background: linear-gradient(135deg, #c9b8ff 0%, #8ecae6 50%, #ffb8d9 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: 0 0 40px rgba(180, 160, 255, 0.3); }
+.header p { margin-top: 8px; font-size: 13px; letter-spacing: 3px; color: rgba(255, 255, 255, 0.4); }
+.stats { position: fixed; top: 30px; right: 30px; z-index: 10; background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 16px 20px; min-width: 140px; }
+.stats-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.stats-item:last-child { margin-bottom: 0; }
+.stats-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.stats-dot.fragment { background: #a8d8ff; box-shadow: 0 0 6px #a8d8ff; }
+.stats-dot.thread { background: #c9b8ff; box-shadow: 0 0 6px #c9b8ff; }
+.stats-dot.claim { background: #ffd6a5; box-shadow: 0 0 8px #ffd6a5; }
+.stats-label { font-size: 12px; color: rgba(255, 255, 255, 0.5); flex: 1; }
+.stats-value { font-size: 16px; font-weight: 500; color: #fff; }
+.footer { flex-wrap: wrap; justify-content: center; max-width: 90vw; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 12px; align-items: center; }
+.footer input { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 10px 18px; color: #fff; font-size: 13px; width: 140px; outline: none; backdrop-filter: blur(10px); transition: all 0.3s; }
+.footer input:focus { border-color: rgba(180, 160, 255, 0.5); box-shadow: 0 0 20px rgba(180, 160, 255, 0.15); }
+.footer input::placeholder { color: rgba(255, 255, 255, 0.3); }
+.footer button { background: linear-gradient(135deg, rgba(138, 99, 210, 0.6), rgba(79, 156, 210, 0.6)); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; padding: 10px 20px; color: #fff; font-size: 13px; cursor: pointer; backdrop-filter: blur(10px); transition: all 0.3s; }
+.footer button:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(138, 99, 210, 0.4); }
+.star-info { position: fixed; z-index: 20; max-width: 320px; background: rgba(20, 18, 40, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px 18px; font-size: 13px; line-height: 1.6; color: rgba(255, 255, 255, 0.85); opacity: 0; pointer-events: none; transition: opacity 0.25s; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+.star-info.visible { opacity: 1; }
+.star-info .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-bottom: 8px; font-weight: 500; }
+.star-info .tag.fragment { background: rgba(168, 216, 255, 0.2); color: #a8d8ff; }
+.star-info .tag.thread { background: rgba(201, 184, 255, 0.2); color: #c9b8ff; }
+.star-info .tag.claim { background: rgba(255, 214, 165, 0.2); color: #ffd6a5; }
+.star-info .content { word-break: break-word; max-height: 180px; overflow-y: auto; }
+.star-info .time { margin-top: 8px; font-size: 11px; color: rgba(255, 255, 255, 0.35); }
+.loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 30; text-align: center; transition: opacity 0.5s; }
+.loading.hidden { opacity: 0; pointer-events: none; }
+.loading-spinner { width: 40px; height: 40px; border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: #c9b8ff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+.loading p { font-size: 13px; color: rgba(255, 255, 255, 0.5); letter-spacing: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.shooting-star { position: fixed; width: 2px; height: 2px; background: #fff; border-radius: 50%; box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.6); z-index: 2; pointer-events: none; }
+.shooting-star::after { content: ''; position: absolute; top: 0; left: 0; width: 100px; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0.8), transparent); transform-origin: left center; }
 </style>
 </head>
 <body>
-
 <div class="nebula nebula-1"></div>
 <div class="nebula nebula-2"></div>
 <div class="nebula nebula-3"></div>
-
 <canvas id="starfield"></canvas>
-
 <div class="header">
   <h1>记忆星空</h1>
   <p>TWIG · STARMAP</p>
 </div>
-
 <div class="stats">
-  <div class="stats-item">
-    <div class="stats-dot fragment"></div>
-    <span class="stats-label">记忆碎片</span>
-    <span class="stats-value" id="count-fragments">0</span>
-  </div>
-  <div class="stats-item">
-    <div class="stats-dot thread"></div>
-    <span class="stats-label">线索星座</span>
-    <span class="stats-value" id="count-threads">0</span>
-  </div>
-  <div class="stats-item">
-    <div class="stats-dot claim"></div>
-    <span class="stats-label">认知亮星</span>
-    <span class="stats-value" id="count-claims">0</span>
-  </div>
+  <div class="stats-item"><div class="stats-dot fragment"></div><span class="stats-label">记忆碎片</span><span class="stats-value" id="count-fragments">0</span></div>
+  <div class="stats-item"><div class="stats-dot thread"></div><span class="stats-label">线索星座</span><span class="stats-value" id="count-threads">0</span></div>
+  <div class="stats-item"><div class="stats-dot claim"></div><span class="stats-label">认知亮星</span><span class="stats-value" id="count-claims">0</span></div>
 </div>
-
 <div class="footer">
-  <input type="text" id="userIdInput" placeholder="输入 userId 查看星空" value="muqiu">
+  <input type="text" id="userIdInput" placeholder="userId" value="muqiu">
+  <input type="password" id="tokenInput" placeholder="auth token">
   <button onclick="loadStarmap()">点亮星空</button>
 </div>
-
 <div class="star-info" id="starInfo">
   <span class="tag" id="starTag">碎片</span>
   <div class="content" id="starContent"></div>
   <div class="time" id="starTime"></div>
 </div>
-
 <div class="loading" id="loading">
   <div class="loading-spinner"></div>
   <p>正在唤醒记忆星空</p>
@@ -307,23 +89,13 @@ const CONFIG = {
   rotationSpeed: 0.00015,
   shootingStarInterval: 4000,
 };
-
 const state = {
-  stars: [],
-  threads: [],
-  claims: [],
-  fragments: [],
-  centerX: 0,
-  centerY: 0,
-  rotation: 0,
-  hoveredStar: null,
-  mouseX: 0,
-  mouseY: 0,
+  stars: [], threads: [], claims: [], fragments: [],
+  centerX: 0, centerY: 0, rotation: 0,
+  hoveredStar: null, mouseX: 0, mouseY: 0,
 };
-
 const canvas = document.getElementById('starfield');
 const ctx = canvas.getContext('2d');
-
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -332,45 +104,36 @@ function resizeCanvas() {
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
-
 function getAuthToken() {
+  const inputEl = document.getElementById("tokenInput");
+  if (inputEl && inputEl.value.trim()) return inputEl.value.trim();
   const params = new URLSearchParams(window.location.search);
-  return params.get('token') || CONFIG.authToken;
+  return params.get("token") || CONFIG.authToken;
 }
-
 function getApiBase() {
   if (CONFIG.apiBase) return CONFIG.apiBase;
   return window.location.origin;
 }
-
 async function fetchState(userId) {
   const token = getAuthToken();
   const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  
-  const res = await fetch(`${getApiBase()}/v1/state?userId=${encodeURIComponent(userId)}`, { headers });
-  if (!res.ok) throw new Error(`请求失败: ${res.status}`);
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(getApiBase() + '/v1/state?userId=' + encodeURIComponent(userId), { headers });
+  if (!res.ok) throw new Error('请求失败: ' + res.status);
   return await res.json();
 }
-
 function buildStarmap(data) {
-  state.stars = [];
-  state.threads = [];
-  state.claims = [];
-  state.fragments = [];
-
+  state.stars = []; state.threads = []; state.claims = []; state.fragments = [];
   const fragments = data.fragments || [];
   const threads = data.threads || [];
   const claims = data.claims || [];
-
   const maxRadius = Math.min(canvas.width, canvas.height) * 0.42;
   const minRadius = maxRadius * 0.2;
-
   fragments.forEach((frag, i) => {
     const angle = (i / fragments.length) * Math.PI * 2 + Math.random() * 0.3;
     const radius = minRadius + Math.random() * (maxRadius - minRadius) * 0.8;
     const star = {
-      id: frag.id || `frag_${i}`,
+      id: frag.id || 'frag_' + i,
       type: 'fragment',
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
@@ -388,12 +151,11 @@ function buildStarmap(data) {
     state.stars.push(star);
     state.fragments.push(star);
   });
-
   claims.forEach((claim, i) => {
     const angle = (i / Math.max(claims.length, 1)) * Math.PI * 2 + 0.5 + Math.random() * 0.2;
     const radius = maxRadius * (0.75 + Math.random() * 0.2);
     const star = {
-      id: claim.id || `claim_${i}`,
+      id: claim.id || 'claim_' + i,
       type: 'claim',
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
@@ -411,53 +173,44 @@ function buildStarmap(data) {
     state.stars.push(star);
     state.claims.push(star);
   });
-
   threads.forEach((thread, i) => {
     const fragIds = thread.fragment_ids || thread.members || [];
     if (fragIds.length < 2) return;
-    
-    const threadColor = `hsl(${260 + i * 15 % 60}, 60%, 70%)`;
+    const threadColor = 'hsl(' + (260 + i * 15 % 60) + ', 60%, 70%)';
     state.threads.push({
-      id: thread.id || `thread_${i}`,
+      id: thread.id || 'thread_' + i,
       fragIds: fragIds,
       color: threadColor,
       summary: thread.summary || thread.title || '',
     });
   });
-
   document.getElementById('count-fragments').textContent = fragments.length;
   document.getElementById('count-threads').textContent = threads.length;
   document.getElementById('count-claims').textContent = claims.length;
 }
-
 function getStarById(id) {
   return state.stars.find(s => s.id === id);
 }
-
-function drawStar(star) {
+ function drawStar(star) {
   const x = state.centerX + star.x;
   const y = state.centerY + star.y;
   const size = star.size;
   const brightness = star.brightness * (0.7 + 0.3 * Math.sin(star.twinklePhase));
-
   const glowRadius = size * 4;
   const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
   gradient.addColorStop(0, star.glowColor);
   gradient.addColorStop(0.3, star.glowColor.replace(/[\d.]+\)/, '0.3)'));
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  
   ctx.beginPath();
   ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
   ctx.fillStyle = gradient;
   ctx.globalAlpha = brightness;
   ctx.fill();
   ctx.globalAlpha = 1;
-
   ctx.beginPath();
   ctx.arc(x, y, size, 0, Math.PI * 2);
   ctx.fillStyle = star.color;
   ctx.fill();
-
   if (star.type === 'claim') {
     ctx.strokeStyle = star.color;
     ctx.lineWidth = 0.8;
@@ -472,20 +225,14 @@ function drawStar(star) {
     ctx.globalAlpha = 1;
   }
 }
-
 function drawThreads() {
   state.threads.forEach(thread => {
-    const points = thread.fragIds
-      .map(id => getStarById(id))
-      .filter(Boolean);
-    
+    const points = thread.fragIds.map(id => getStarById(id)).filter(Boolean);
     if (points.length < 2) return;
-
     ctx.strokeStyle = thread.color;
     ctx.lineWidth = 0.8;
     ctx.globalAlpha = CONFIG.threadLineOpacity;
     ctx.beginPath();
-
     for (let i = 0; i < points.length - 1; i++) {
       const p1 = points[i];
       const p2 = points[i + 1];
@@ -493,9 +240,7 @@ function drawThreads() {
       const y1 = state.centerY + p1.y;
       const x2 = state.centerX + p2.x;
       const y2 = state.centerY + p2.y;
-      
       if (i === 0) ctx.moveTo(x1, y1);
-      
       const mx = (x1 + x2) / 2;
       const my = (y1 + y2) / 2;
       const dx = x2 - x1;
@@ -504,14 +249,12 @@ function drawThreads() {
       const offset = dist * 0.1;
       const cx = mx - dy / dist * offset;
       const cy = my + dx / dist * offset;
-      
       ctx.quadraticCurveTo(cx, cy, x2, y2);
     }
     ctx.stroke();
     ctx.globalAlpha = 1;
   });
 }
-
 function drawBackgroundStars() {
   ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
   const count = 100;
@@ -528,20 +271,15 @@ function drawBackgroundStars() {
   }
   ctx.globalAlpha = 1;
 }
-
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackgroundStars();
-
   state.rotation += CONFIG.rotationSpeed;
-
   ctx.save();
   ctx.translate(state.centerX, state.centerY);
   ctx.rotate(state.rotation);
   ctx.translate(-state.centerX, -state.centerY);
-
   drawThreads();
-
   state.stars.forEach((star, i) => {
     star.twinklePhase += star.twinkleSpeed;
     if (star.size < star.baseSize) {
@@ -549,25 +287,20 @@ function animate() {
       if (star.size > star.baseSize) star.size = star.baseSize;
     }
   });
-
   const sorted = [...state.stars].sort((a, b) => a.size - b.size);
   sorted.forEach(star => drawStar(star));
-
   ctx.restore();
   requestAnimationFrame(animate);
 }
 const starInfo = document.getElementById('starInfo');
-
 canvas.addEventListener('mousemove', (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
   state.mouseX = mx;
   state.mouseY = my;
-
   let found = null;
   let minDist = Infinity;
-
   state.stars.forEach(star => {
     const sx = state.centerX + star.x;
     const sy = state.centerY + star.y;
@@ -575,64 +308,42 @@ canvas.addEventListener('mousemove', (e) => {
     const dy = my - sy;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const hitRadius = star.type === 'claim' ? 15 : 8;
-    
-    if (dist < hitRadius && dist < minDist) {
-      minDist = dist;
-      found = star;
-    }
+    if (dist < hitRadius && dist < minDist) { minDist = dist; found = star; }
   });
-
   if (found !== state.hoveredStar) {
     state.hoveredStar = found;
     updateStarInfo(found);
   }
 });
-
 function updateStarInfo(star) {
-  if (!star) {
-    starInfo.classList.remove('visible');
-    return;
-  }
-
+  if (!star) { starInfo.classList.remove('visible'); return; }
   const tag = starInfo.querySelector('#starTag');
   tag.className = 'tag ' + star.type;
   tag.textContent = star.type === 'fragment' ? '记忆碎片' : star.type === 'claim' ? '认知论断' : '线索';
-
   starInfo.querySelector('#starContent').textContent = star.content || '(无内容)';
   starInfo.querySelector('#starTime').textContent = star.time ? formatTime(star.time) : '';
-
   const sx = state.centerX + star.x;
   const sy = state.centerY + star.y;
   let left = sx + 20;
   let top = sy - 20;
-  
   if (left + 320 > window.innerWidth) left = sx - 340;
   if (top + 200 > window.innerHeight) top = window.innerHeight - 220;
   if (top < 20) top = 20;
-
   starInfo.style.left = left + 'px';
   starInfo.style.top = top + 'px';
   starInfo.classList.add('visible');
 }
-
 function formatTime(t) {
   if (!t) return '';
   const d = new Date(t);
   if (isNaN(d.getTime())) return t;
-  return d.toLocaleString('zh-CN', { 
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  });
+  return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
-
 canvas.addEventListener('touchstart', (e) => {
   const touch = e.touches[0];
   const rect = canvas.getBoundingClientRect();
   const mx = touch.clientX - rect.left;
   const my = touch.clientY - rect.top;
-  state.mouseX = mx;
-  state.mouseY = my;
-
   let found = null;
   let minDist = Infinity;
   state.stars.forEach(star => {
@@ -642,78 +353,54 @@ canvas.addEventListener('touchstart', (e) => {
     const dy = my - sy;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const hitRadius = star.type === 'claim' ? 20 : 12;
-    if (dist < hitRadius && dist < minDist) {
-      minDist = dist;
-      found = star;
-    }
+    if (dist < hitRadius && dist < minDist) { minDist = dist; found = star; }
   });
-
   state.hoveredStar = found;
   updateStarInfo(found);
 }, { passive: true });
-
 function createShootingStar() {
   const star = document.createElement('div');
   star.className = 'shooting-star';
-  
   const startX = Math.random() * window.innerWidth * 0.6;
   const startY = -10;
   star.style.left = startX + 'px';
   star.style.top = startY + 'px';
-  
   const angle = 30 + Math.random() * 30;
   const distance = 300 + Math.random() * 400;
   const duration = 800 + Math.random() * 600;
-  
-  star.style.transform = `rotate(${angle}deg)`;
-  
+  star.style.transform = 'rotate(' + angle + 'deg)';
   document.body.appendChild(star);
-  
   const dx = Math.cos(angle * Math.PI / 180) * distance;
   const dy = Math.sin(angle * Math.PI / 180) * distance;
-  
   star.animate([
-    { transform: `rotate(${angle}deg) translate(0, 0)`, opacity: 1 },
-    { transform: `rotate(${angle}deg) translate(${dx}px, ${dy}px)`, opacity: 0 }
-  ], {
-    duration: duration,
-    easing: 'ease-out',
-    fill: 'forwards'
-  }).onfinish = () => star.remove();
+    { transform: 'rotate(' + angle + 'deg) translate(0, 0)', opacity: 1 },
+    { transform: 'rotate(' + angle + 'deg) translate(' + dx + 'px, ' + dy + 'px)', opacity: 0 }
+  ], { duration: duration, easing: 'ease-out', fill: 'forwards' }).onfinish = () => star.remove();
 }
-
 setInterval(createShootingStar, CONFIG.shootingStarInterval);
-
 async function loadStarmap() {
   const userId = document.getElementById('userIdInput').value.trim();
   if (!userId) return;
-
   const loading = document.getElementById('loading');
   loading.classList.remove('hidden');
-
   try {
     const data = await fetchState(userId);
     buildStarmap(data);
   } catch (err) {
     console.error('加载失败:', err);
-    alert('加载记忆失败：' + err.message + '\n\n请检查：\n1. userId 是否正确\n2. 是否需要 token 认证（?token=xxx）\n3. API 地址是否配置正确');
+    alert('加载记忆失败：' + err.message + '\n\n请检查userId和token是否正确');
   } finally {
     loading.classList.add('hidden');
   }
 }
-
-window.addEventListener('load', () => {
+window.addEventListener("load", () => {
   const params = new URLSearchParams(window.location.search);
-  const userId = params.get('userId');
-  if (userId) {
-    document.getElementById('userIdInput').value = userId;
-  }
-  
-  setTimeout(() => {
-    loadStarmap();
-  }, 500);
+  const userId = params.get("userId");
+  if (userId) document.getElementById("userIdInput").value = userId;
+  const token = params.get("token");
+  if (token) document.getElementById("tokenInput").value = token;
+  setTimeout(() => { loadStarmap(); }, 500);
 });
-
 animate();
 </script>
 </body>
