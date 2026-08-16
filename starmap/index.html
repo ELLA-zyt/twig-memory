@@ -740,9 +740,7 @@ function showDetail(star) {
 
   typeEl.textContent = star.type;
   if (star.title && star.title.length > 0 && star.content.indexOf(star.title) !== 0) {
-    bodyEl.textContent = star.title + "
-
-" + (star.content || "（无内容）");
+    bodyEl.textContent = star.title + "\n\n" + (star.content || "（无内容）");
   } else {
     bodyEl.textContent = star.content || "（无内容）";
   }
