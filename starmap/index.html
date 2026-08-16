@@ -6,6 +6,7 @@
 <title>记忆星空 · Twig Starmap</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
@@ -14,12 +15,19 @@ html, body {
   color: #fff;
   cursor: default;
 }
-#starfield { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-/* 星空背景层 */
+#starfield {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+}
+
+/* 背景渐变层 */
 .bg-layer {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  z-index: 0; pointer-events: none;
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
   background:
     radial-gradient(ellipse at 20% 30%, rgba(100, 80, 200, 0.25) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 70%, rgba(60, 120, 200, 0.2) 0%, transparent 50%),
@@ -27,11 +35,14 @@ html, body {
     linear-gradient(180deg, #05051a 0%, #0a0a2a 50%, #050515 100%);
 }
 
-/* 星云光斑 */
+/* 星云 */
 .nebula {
-  position: fixed; border-radius: 50%;
-  filter: blur(100px); opacity: 0.5;
-  z-index: 0; pointer-events: none;
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.5;
+  z-index: 0;
+  pointer-events: none;
 }
 .nebula-1 {
   width: 700px; height: 700px;
@@ -57,49 +68,86 @@ html, body {
 
 /* 标题 */
 .header {
-  position: fixed; top: 40px; left: 50%;
-  transform: translateX(-50%); z-index: 10;
-  text-align: center; pointer-events: none;
+  position: fixed;
+  top: 40px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  text-align: center;
+  pointer-events: none;
 }
 .header h1 {
-  font-size: 36px; font-weight: 200;
+  font-size: 36px;
+  font-weight: 200;
   letter-spacing: 12px;
   background: linear-gradient(135deg, #e0d4ff 0%, #a8d8ff 40%, #ffc8e0 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   background-clip: text;
   text-shadow: 0 0 60px rgba(180, 160, 255, 0.4);
 }
 .header p {
-  margin-top: 10px; font-size: 12px;
+  margin-top: 10px;
+  font-size: 12px;
   letter-spacing: 6px;
   color: rgba(255,255,255,0.3);
 }
 
 /* 统计面板 */
 .stats {
-  position: fixed; top: 40px; right: 40px; z-index: 10;
+  position: fixed;
+  top: 40px; right: 40px;
+  z-index: 10;
   background: rgba(255,255,255,0.03);
   backdrop-filter: blur(15px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 20px;
-  padding: 20px 24px; min-width: 160px;
+  padding: 20px 24px;
+  min-width: 160px;
 }
-.stats-item { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.stats-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
 .stats-item:last-child { margin-bottom: 0; }
 .stats-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
-.stats-dot.fragment { background: #8ecae6; box-shadow: 0 0 10px #8ecae6, 0 0 20px rgba(142,202,230,0.5); }
-.stats-dot.thread { background: #c9b8ff; box-shadow: 0 0 10px #c9b8ff, 0 0 20px rgba(201,184,255,0.5); }
-.stats-dot.claim { background: #ffd6a5; box-shadow: 0 0 12px #ffd6a5, 0 0 25px rgba(255,214,165,0.6); }
-.stats-label { font-size: 13px; color: rgba(255,255,255,0.5); flex: 1; }
-.stats-value { font-size: 20px; font-weight: 300; color: #fff; }
+.stats-dot.fragment {
+  background: #8ecae6;
+  box-shadow: 0 0 10px #8ecae6, 0 0 20px rgba(142,202,230,0.5);
+}
+.stats-dot.thread {
+  background: #c9b8ff;
+  box-shadow: 0 0 10px #c9b8ff, 0 0 20px rgba(201,184,255,0.5);
+}
+.stats-dot.claim {
+  background: #ffd6a5;
+  box-shadow: 0 0 12px #ffd6a5, 0 0 25px rgba(255,214,165,0.6);
+}
+.stats-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  flex: 1;
+}
+.stats-value {
+  font-size: 20px;
+  font-weight: 300;
+  color: #fff;
+}
 
-/* 底部操作区 */
+/* 底部输入 */
 .footer {
-  position: fixed; bottom: 40px; left: 50%;
-  transform: translateX(-50%); z-index: 10;
-  display: flex; gap: 14px; align-items: center;
+  position: fixed;
+  bottom: 40px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 14px;
+  align-items: center;
   background: rgba(20, 18, 50, 0.4);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.08);
@@ -110,9 +158,12 @@ html, body {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 20px;
-  padding: 10px 16px; color: #fff;
-  font-size: 13px; width: 130px;
-  outline: none; backdrop-filter: blur(10px);
+  padding: 10px 16px;
+  color: #fff;
+  font-size: 13px;
+  width: 130px;
+  outline: none;
+  backdrop-filter: blur(10px);
   transition: all 0.3s;
 }
 .footer input:focus {
@@ -124,8 +175,10 @@ html, body {
   background: linear-gradient(135deg, rgba(138,99,210,0.8), rgba(79,156,210,0.8));
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: 20px;
-  padding: 10px 22px; color: #fff;
-  font-size: 13px; cursor: pointer;
+  padding: 10px 22px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
   backdrop-filter: blur(10px);
   transition: all 0.3s;
   letter-spacing: 1px;
@@ -134,7 +187,7 @@ html, body {
   transform: translateY(-2px);
   box-shadow: 0 6px 25px rgba(138,99,210,0.5);
 }
-/* 星星详情弹窗 */
+  /* 星星详情弹窗 */
 .star-detail {
   position: fixed; z-index: 100;
   width: 360px; max-width: 90vw;
@@ -274,7 +327,7 @@ html, body {
 <div class="stats">
   <div class="stats-item">
     <div class="stats-dot fragment"></div>
-    <span class="stats-label">记忆碎片</span>
+       <span class="stats-label">记忆碎片</span>
     <span class="stats-value" id="count-fragments">0</span>
   </div>
   <div class="stats-item">
@@ -400,9 +453,10 @@ function buildStarmap(data) {
       twinkleSpeed: CONFIG.twinkleSpeed * (0.6 + Math.random() * 0.8),
       color: '#8ecae6',
       glowColor: 'rgba(142, 202, 230, 0.8)',
-      content: frag.content || frag.text || '',
-      time: frag.created_at || frag.timestamp || '',
-      threadIds: frag.thread_ids || [],
+      content: frag.body || frag.content || frag.text || '',
+      title: frag.title || '',
+      time: frag.dateLabel || frag.created_at || frag.timestamp || '',
+      threadIds: frag.threadIds || frag.thread_ids || [],
     };
     state.stars.push(star);
     state.fragments.push(star);
@@ -413,7 +467,7 @@ function buildStarmap(data) {
     const radius = maxRadius * (0.7 + Math.random() * 0.25);
     const star = {
       id: claim.id || 'claim_' + i,
-      type: 'claim',
+           type: 'claim',
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
       baseSize: CONFIG.claimSize * (0.8 + Math.random() * 0.4),
@@ -423,9 +477,10 @@ function buildStarmap(data) {
       twinkleSpeed: CONFIG.twinkleSpeed * 0.5,
       color: '#ffd6a5',
       glowColor: 'rgba(255, 214, 165, 0.9)',
-      content: claim.content || claim.text || claim.statement || '',
-      time: claim.created_at || '',
-      threadIds: claim.thread_ids || [],
+      content: claim.body || claim.content || claim.text || claim.statement || '',
+      title: claim.title || '',
+      time: claim.dateLabel || claim.created_at || '',
+      threadIds: claim.threadIds || claim.thread_ids || [],
     };
     state.stars.push(star);
     state.claims.push(star);
@@ -563,8 +618,7 @@ function drawBackgroundStars() {
   }
   ctx.globalAlpha = 1;
 }
-
-function animate() {
+  function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   drawBackgroundStars();
@@ -705,8 +759,7 @@ canvas.addEventListener('touchend', (e) => {
     }
   }
 });
-
-function showDetail(star) {
+  function showDetail(star) {
   state.selectedStar = star;
   const iconEl = document.getElementById('detailIcon');
   const titleEl = document.getElementById('detailTitle');
@@ -727,7 +780,11 @@ function showDetail(star) {
     titleEl.textContent = '线索';
   }
   typeEl.textContent = star.type;
-  bodyEl.textContent = star.content || '（无内容）';
+  if (star.title && star.title.length > 0 && star.content.indexOf(star.title) !== 0) {
+    bodyEl.textContent = star.title + '\n\n' + (star.content || '（无内容）');
+  } else {
+    bodyEl.textContent = star.content || '（无内容）';
+  }
   timeEl.textContent = star.time ? formatTime(star.time) : '';
   idEl.textContent = 'ID: ' + (star.id || '');
 
