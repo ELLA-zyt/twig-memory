@@ -123,6 +123,47 @@
     display: flex;
     flex-direction: column;
   }
+  .panel-handle {
+    position: absolute;
+    left: -36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 120px;
+    background: rgba(26, 11, 46, 0.7);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(196, 181, 253, 0.15);
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+  }
+  .panel-handle:hover {
+    background: rgba(139, 92, 246, 0.3);
+    box-shadow: -4px 0 20px rgba(139, 92, 246, 0.3);
+  }
+  .panel-handle .handle-icon {
+    font-size: 20px;
+    color: rgba(196, 181, 253, 0.8);
+    writing-mode: vertical-rl;
+    transition: transform 0.3s ease;
+  }
+  .panel-handle .handle-text {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(255, 255, 255, 0.5);
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  .list-panel.show .panel-handle .handle-icon {
+    transform: rotate(180deg);
+  }
   .list-panel.show {
     transform: translateX(0);
   }
@@ -551,8 +592,7 @@
     <div class="subtitle">MEMORY · STARMAP</div>
   </div>
   <div class="view-toggle">
-    <button class="active" id="btnStarView" onclick="switchView('star')">星 空</button>
-    <button id="btnListView" onclick="switchView('list')">列 表</button>
+    <button id="toggleListBtn" onclick="toggleList()">☰ 记忆列表</button>
   </div>
 </div>
 
@@ -563,6 +603,10 @@
 
 <!-- 列表面板 -->
 <div class="list-panel" id="listPanel">
+  <div class="panel-handle" onclick="toggleList()">
+    <span class="handle-icon">‹</span>
+    <span class="handle-text">记忆列表</span>
+  </div>
   <div class="list-header">
     <h2 id="listTitle">记 忆 碎 片</h2>
 
@@ -634,6 +678,7 @@
     offsetX: 0,
     offsetY: 0,
     scale: 1,
+    rotation: 0,
     isDragging: false,
     lastMouseX: 0,
     lastMouseY: 0,
@@ -856,8 +901,8 @@
 
     // 收集所有星星的投影数据，按 z 排序
     const projected = state.stars.map(function (star, index) {
-      // 缓慢自转
-      const angle = state.time * 0.05;
+      // 自动缓慢自转 + 用户拖拽旋转
+      const angle = state.time * 0.05 + state.rotation;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
       const rx = star.x * cosA - star.z * sinA;
@@ -919,18 +964,27 @@
     ctx.arc(p.x, p.y, Math.max(r, 0.5), 0, Math.PI * 2);
     ctx.fill();
 
-    // 认知亮星画十字光
-    if (star.isClaim) {
-      const lensR = r * 6;
-      ctx.strokeStyle = 'hsla(' + star.hue + ', 80%, 75%, ' + (0.25 * twinkle) + ')';
-      ctx.lineWidth = 0.8 * p.scale;
-      ctx.beginPath();
-      ctx.moveTo(p.x - lensR, p.y);
-      ctx.lineTo(p.x + lensR, p.y);
-      ctx.moveTo(p.x, p.y - lensR);
-      ctx.lineTo(p.x, p.y + lensR);
-      ctx.stroke();
-    }
+    // 十字星光
+    const crossLen = r * (star.isClaim ? 8 : 5);
+    const crossAlpha = star.isClaim ? 0.35 * twinkle : 0.2 * twinkle;
+    ctx.strokeStyle = 'hsla(' + star.hue + ', 80%, 80%, ' + crossAlpha + ')';
+    ctx.lineWidth = (star.isClaim ? 1.2 : 0.8) * p.scale * state.scale;
+    ctx.beginPath();
+    ctx.moveTo(p.x - crossLen, p.y);
+    ctx.lineTo(p.x + crossLen, p.y);
+    ctx.moveTo(p.x, p.y - crossLen);
+    ctx.lineTo(p.x, p.y + crossLen);
+    ctx.stroke();
+    // 斜向十字线（更淡，增加星芒感）
+    const crossLen2 = crossLen * 0.5;
+    ctx.strokeStyle = 'hsla(' + star.hue + ', 80%, 85%, ' + (crossAlpha * 0.5) + ')';
+    ctx.lineWidth = (star.isClaim ? 0.8 : 0.5) * p.scale * state.scale;
+    ctx.beginPath();
+    ctx.moveTo(p.x - crossLen2, p.y - crossLen2);
+    ctx.lineTo(p.x + crossLen2, p.y + crossLen2);
+    ctx.moveTo(p.x - crossLen2, p.y + crossLen2);
+    ctx.lineTo(p.x + crossLen2, p.y - crossLen2);
+    ctx.stroke();
 
     // 悬停高亮
     if (state.hoveredStar === index) {
@@ -996,7 +1050,7 @@
       const dx = e.clientX - state.lastMouseX;
       const dy = e.clientY - state.lastMouseY;
       if (Math.abs(dx) + Math.abs(dy) > 3) state.dragMoved = true;
-      state.offsetX += dx;
+      state.rotation += dx * 0.005;
       state.offsetY += dy;
       state.lastMouseX = e.clientX;
       state.lastMouseY = e.clientY;
@@ -1083,24 +1137,15 @@
     state.isDragging = false;
   }
 
-  // ========== 视图切换 ==========
-  window.switchView = function (view) {
-    if (state.currentView === view) return;
-    state.currentView = view;
-
-    const btnStar = document.getElementById('btnStarView');
-    const btnList = document.getElementById('btnListView');
+  // ========== 列表抽屉开关 ==========
+  window.toggleList = function () {
     const panel = document.getElementById('listPanel');
-
-    if (view === 'list') {
-      btnList.classList.add('active');
-      btnStar.classList.remove('active');
+    const isShown = panel.classList.contains('show');
+    if (isShown) {
+      panel.classList.remove('show');
+    } else {
       panel.classList.add('show');
       renderList();
-    } else {
-      btnStar.classList.add('active');
-      btnList.classList.remove('active');
-      panel.classList.remove('show');
     }
   };
 
