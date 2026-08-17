@@ -96,6 +96,8 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
 
 其他平台（Railway / Render / 自有 VPS）同样适用：只要支持 Dockerfile + 注入 `PORT` 即可。
 
+> **承重安全组件**：危机协议（危机词表命中 → 立即中止全部对照窗口 + 窗口安全阀指令）是无开关的无条件代码路径，全文见 [docs/CRISIS-PROTOCOL.md](../docs/CRISIS-PROTOCOL.md)。**裁剪它等于拆除承重安全组件**；按命名惯例（[docs/COMPLIANCE.md](../docs/COMPLIANCE.md) 附则），移除了危机协议的部署不得自称基于雾尼 / 衔枝。
+
 ## 宿主 agent 的典型接法
 
 1. 每轮对话结束后，把用户新表达的事实/状态变化 `memory_ingest` 给引擎。
