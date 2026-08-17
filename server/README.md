@@ -229,16 +229,26 @@ npx tsx server/eval-locomo.ts --convos 10          # 全量 1986 题
 npx tsx server/eval-locomo.ts --convos 1           # 单会话子集（~200 题）
 npx tsx server/eval-locomo.ts --convos 1 --cats 4 --limit 10   # 微试点
 npx tsx server/eval-locomo.ts --no-hyde            # 关闭 HyDE 扩查询（消融对照）
+npx tsx server/eval-locomo.ts --embed --k 15       # 混合检索：BM25 + 硅基流动向量 RRF 融合
 ```
+
+`--embed` 需要在 `.env.local` 加 `SF_API_KEY=sk-...`（可选 `MUNINN_EMBED_MODEL`，默认 `BAAI/bge-m3`）；
+嵌入按 `model:sha1(text)` 磁盘缓存（`eval-data/embed-cache.json`），重跑只付一次钱。
+作答/判分模型经 `MUNINN_API_KEY` / `MUNINN_BASE_URL` / `MUNINN_MODEL` 切换（任意 OpenAI 兼容方）。
 
 管线定位：**事实底盘 = 碎片层 + 检索**（LoCoMo 测「记不记得」，不测「理解了吗」，
 与叙事层评测分工）。全部轮次直灌碎片库（零 LLM）→ 每题检索 top-k → LLM 仅凭检索
 碎片作答（检索不到就拒答）→ 独立 LLM 判分（adversarial 用「正确拒答才算对」判据）。
 
-检索 = **BM25 词元检索 + HyDE 批量扩查询**（问题先改写成假想证据碎片再检索，弥合
-转述鸿沟；仍是零向量，embedding 到位后替换 `buildRetriever` 即可，作答/判分管线不变）。
+检索 = **BM25 词元 + BGE-M3 向量 RRF 混合 + HyDE 批量扩查询**（问题先改写成假想证据碎片再检索，弥合转述鸿沟；`--embed` 开关向量路，默认纯 BM25；向量经 `embed-node.ts` 走硅基流动 embeddings API）。
 及格线 = mem0 基线 × 90%（参照 arXiv:2604.04853 Table 11，LLM-judge，adversarial 单列）：
 single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 / 总分 ≥.602。
+
+**全量基线（2026-08-17，k=15，BM25+向量 RRF + HyDE，作答/判分 MiniMax M3 经硅基流动）**：
+1986 题零批调用失败——single-hop **0.800** / temporal **0.726** / multi-hop **0.504** / open-domain 0.531 / adversarial 0.843（单列不计入）；
+**总分 0.640**，双口径过线（四类及格线宏平均 0.5551、文档总分口径 0.602），高于 mem0 参照宏平均 0.617。
+open-domain（0.531 vs 0.729）为已知短板，差在跨碎片推断，已立项为下一靶子。
+mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径」表述。
 
 限流注意：LoCoMo 的 prompt 远大于冲突评测，免费档 TPM 很容易撞墙。管线已做三重防护
 （传输层 429 指数退避、批处理 10/5/5、批级二次重试），`--pace`（默认 12 秒）可再调慢；
@@ -261,7 +271,7 @@ single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 
 | ⑥ | 事实层修正标注 | **已清**：`/v1/correct`，原文不动，判定层经 fragView 见修正后事实 |
 | ⑦ | contested 再提门槛 | **已清**：≥3 独立新证据 + 14 天冷却 + 邀请式措辞 + 两否封存 + 打地鼠双守卫 |
 | ⑧ | 冲突测试集规范 | **已清**：22 例类型学数据集 + 机械盲评 + `eval-counter.ts` 跑批（基线 100%） |
-| ⑨ | LoCoMo 及格线量化 | **管线已建**（`eval-locomo.ts`：BM25+HyDE 检索、批量作答判分、mem0×0.9 对照）；基线数据见评测节 |
+| ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.640，双口径过线（宏平均 0.5551 / 文档口径 0.602），超 mem0 参照宏平均 0.617；open-domain 未过线，已立项 |
 | ⑪ | 合规声明文本 | **未做**：not-a-medical-device 等三件文本起草 |
 
 ## MVP 简化声明（后续迭代方向）

@@ -13,18 +13,22 @@
  *
  * 及格线（债务⑨）：达到 mem0 基线的 90%+。参照（arXiv:2604.04853 Table 11，LLM-judge，
  * adversarial 不计分）：Mem0 = single-hop .6713 / temporal .5551 / multi-hop .5115 /
- * open-domain .7293 / 总分 .6688 → 目标 ≥ .602（四类宏平均）。
+ * open-domain .7293 → 各类及格线 = 参照×0.9，总分及格线 = 四类及格线的宏平均 ≈ .5551。
+ *
+ * 检索形态：默认 BM25 词法检索；--embed 开启混合检索（BM25 + 硅基流动向量，RRF 融合）。
+ * 词法检索存在转述鸿沟（实测证据召回 k=10 仅 .52，k=30 封顶 .63），open-domain 尤其明显。
  *
  * 运行：
  *   npx tsx server/eval-locomo.ts                          # 全量（10 会话 × 1986 题）
  *   npx tsx server/eval-locomo.ts --convos 1 --cats 4 --limit 8   # 微试点
- *   npx tsx server/eval-locomo.ts --convos 2                # 子集
+ *   npx tsx server/eval-locomo.ts --convos 1 --embed --k 15       # 混合检索子集
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { moonshotChat, extractJson } from '../src/engine/llm'
 import { registerNodeTransport } from './llm-node'
+import { embedTexts, embeddingsAvailable } from './embed-node'
 
 /* ---------------- 参照基线（mem0 × 0.9 = 及格线） ---------------- */
 
@@ -58,7 +62,8 @@ export function aggregate(results: { category: number; correct: number }[]): { s
     }
   }
   const overall = n > 0 ? sum / n : 0
-  const overallBar = barSum
+  // 及格线同口径宏平均（此前误用求和，overall 永远越不过 2.22 的线，PASS 不可达）
+  const overallBar = n > 0 ? barSum / n : 0
   return { stats, overall, overallBar, overallPass: overall >= overallBar }
 }
 
@@ -140,6 +145,34 @@ export function buildRetriever(frags: Frag[]): Retriever {
   }
 }
 
+/* ---------------- 向量检索与融合（--embed · 设计文档 §4.4 检索层迁移） ---------------- */
+
+/** 向量 top-k：embedTexts 已单位化，点积即 cosine */
+export function topByVector(frags: Frag[], fragVecs: number[][], qVec: number[], k: number): Frag[] {
+  return frags
+    .map((f, i) => {
+      const v = fragVecs[i]
+      let s = 0
+      for (let d = 0; d < qVec.length; d++) s += v[d] * qVec[d]
+      return { f, s }
+    })
+    .sort((a, b) => b.s - a.s)
+    .slice(0, k)
+    .map((x) => x.f)
+}
+
+/** RRF 融合：词法管精确词（人名/日期），向量管转述（语义鸿沟），两路互补 */
+export function fuseRrf(bm25: Frag[], vec: Frag[], k: number, rrfK = 60): Frag[] {
+  const acc = new Map<string, { f: Frag; s: number }>()
+  const add = (list: Frag[]) => list.forEach((f, r) => {
+    const e = acc.get(f.id) ?? { f, s: 0 }
+    e.s += 1 / (rrfK + r + 1)
+    acc.set(f.id, e)
+  })
+  add(bm25); add(vec)
+  return [...acc.values()].sort((a, b) => b.s - a.s).slice(0, k).map((e) => e.f)
+}
+
 /* ---------------- 作答与判分（批处理：限流友好，10/5/5 题一批） ---------------- */
 
 /** HyDE 批量扩查询：把问题改写成「假想中的证据碎片」——答案词汇进入查询，弥合转述鸿沟（§4.4 检索层迁移） */
@@ -151,7 +184,8 @@ export async function expandQueryBatch(questions: string[]): Promise<string[]> {
       content: `You generate hypothetical memory fragments for retrieval (HyDE). For each question about one person's months-long conversation memory, write 1-2 sentences that a real memory fragment containing the answer would plausibly look like — use the concrete vocabulary the answer would carry (names, places, activities, dates). Do NOT answer the questions; sketch the fragments. Output JSON only: {"snippets":["...","..."]} with exactly ${questions.length} entries in input order.`,
     },
     { role: 'user', content: list },
-  ], { temperature: 0.7, maxTokens: 120 * questions.length })
+    // 思考型模型会把推理链计入 max_tokens：预算按「思考+产出」双份给
+  ], { temperature: 0.7, maxTokens: 500 * questions.length })
   const j = extractJson<{ snippets: string[] }>(raw)
   const out = Array.isArray(j?.snippets) ? j!.snippets.map((s) => (typeof s === 'string' ? s : '')) : []
   while (out.length < questions.length) out.push('')
@@ -165,10 +199,10 @@ export async function answerBatch(items: { question: string; frags: Frag[] }[]):
   const raw = await moonshotChat([
     {
       role: 'system',
-      content: `You are the long-term memory of one participant in a months-long conversation. Answer EACH question using ONLY the memory fragments attached to that question (they are independent). If a question's fragments do not contain its answer, reply for that question exactly: I don't have that information. Never guess. Each answer under 30 words. Output JSON only: {"answers":["...","..."]} with exactly ${items.length} entries in input order.`,
+      content: `You are the long-term memory of one participant in a months-long conversation. Answer EACH question using ONLY the memory fragments attached to that question (they are independent). If a question's fragments do not contain its answer, reply for that question exactly: I don't have that information. Never guess. For when/how long/how often questions, rely on the [date] prefix of the fragment that states the event — that date is when the event was discussed and is usually the answer. For would/likely questions about preferences or plans, give the most plausible short inference from the fragments (start with "Likely") instead of declining. Each answer under 30 words. Output JSON only: {"answers":["...","..."]} with exactly ${items.length} entries in input order.`,
     },
     { role: 'user', content: list },
-  ], { temperature: 0.1, maxTokens: 120 * items.length })
+  ], { temperature: 0.1, maxTokens: 700 * items.length })
   const j = extractJson<{ answers: string[] }>(raw)
   const out = Array.isArray(j?.answers) ? j!.answers.map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__')) : []
   while (out.length < items.length) out.push('__LLM_FAILED__')
@@ -176,7 +210,7 @@ export async function answerBatch(items: { question: string; frags: Frag[] }[]):
 }
 
 /** 按类别分批判分（同批同类别，判据一致）；adversarial：正确拒答才得分 */
-async function judgeBatch(cat: number, items: { question: string; gold: string; pred: string }[]): Promise<number[]> {
+export async function judgeBatch(cat: number, items: { question: string; gold: string; pred: string }[]): Promise<number[]> {
   const adversarial = cat === 5
   const list = items.map((x, i) => `${i + 1}. Q: ${x.question}\n   Gold: ${x.gold}\n   System: ${x.pred}`).join('\n')
   const rubric = adversarial
@@ -188,7 +222,7 @@ async function judgeBatch(cat: number, items: { question: string; gold: string; 
       content: `You are an impartial grader for a conversational memory benchmark. ${rubric} Output JSON only: {"scores":[1,0,...]} with exactly ${items.length} entries in input order.`,
     },
     { role: 'user', content: list },
-  ], { temperature: 0.1, maxTokens: 200 })
+  ], { temperature: 0.1, maxTokens: 500 * items.length })
   const j = extractJson<{ scores: number[] }>(raw)
   const scores = Array.isArray(j?.scores) ? j!.scores.map((s) => (Number(s) >= 1 ? 1 : 0)) : []
   while (scores.length < items.length) scores.push(0)
@@ -210,14 +244,20 @@ async function main() {
   const k = flag('k', 10)
   const useHyde = !args.includes('--no-hyde')
   const pace = flag('pace', 12)
+  const useEmbed = args.includes('--embed')
   const llmReady = registerNodeTransport()
+
+  if (useEmbed && !embeddingsAvailable()) {
+    console.error('[eval-locomo] --embed 需要硅基流动 key：.env.local 加 SF_API_KEY=sk-...（可选 MUNINN_EMBED_MODEL，默认 BAAI/bge-m3）')
+    process.exit(2)
+  }
 
   if (!existsSync(DATA)) {
     console.error(`[eval-locomo] 缺数据：${DATA}\n  curl -sL https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json -o "${DATA}"`)
     process.exit(2)
   }
   const data = JSON.parse(readFileSync(DATA, 'utf8')) as { sample_id: string; conversation: Record<string, unknown>; qa: QA[] }[]
-  console.log(`[eval-locomo] 会话 ${nConvos}/10 · 类别 ${cats.map((c) => CATEGORY_NAMES[c]).join('/')} · top-k=${k} · llm ${llmReady ? 'live' : 'OFFLINE'}\n`)
+  console.log(`[eval-locomo] 会话 ${nConvos}/10 · 类别 ${cats.map((c) => CATEGORY_NAMES[c]).join('/')} · top-k=${k} · 检索 ${useEmbed ? 'BM25+向量 RRF' : 'BM25'} · llm ${llmReady ? 'live' : 'OFFLINE'}\n`)
 
   const detailed: { sample: string; category: number; question: string; pred: string; gold: string; correct: number; topIds: string[] }[] = []
   let done = 0
@@ -252,8 +292,19 @@ async function main() {
       }
     }
 
-    // 2) 检索（问题 + 假想碎片）
-    const retrieved = qas.map((q, i) => retrieve(`${q.question} ${snippets[i] ?? ''}`.trim(), k))
+    // 2) 检索（问题 + 假想碎片；--embed 时与向量路 RRF 融合，碎片/查询各嵌一次，磁盘缓存复用）
+    const queries = qas.map((q, i) => `${q.question} ${snippets[i] ?? ''}`.trim())
+    let fragVecs: number[][] | null = null
+    let qVecs: number[][] | null = null
+    if (useEmbed) {
+      fragVecs = await embedTexts(frags.map((f) => `${f.text} ${f.date}`))
+      qVecs = await embedTexts(queries)
+    }
+    const retrieved = qas.map((_, i) => {
+      const bm25 = retrieve(queries[i], k * 2)
+      if (!useEmbed || !fragVecs || !qVecs) return bm25.slice(0, k)
+      return fuseRrf(bm25, topByVector(frags, fragVecs, qVecs[i], k * 2), k)
+    })
 
     // 3) 批量作答（5 题/批，各自只看自己的碎片）
     const preds: string[] = []

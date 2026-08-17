@@ -13,7 +13,7 @@
 import { setChatTransport } from '../src/engine/llm'
 import { HeadlessMuninn, fragView, type MuninnState } from './core'
 import { SCENARIOS, scenarioPass, scoreCounterRun } from './eval-counter'
-import { aggregate, buildRetriever, CATEGORY_NAMES, parseLocoDate, tokenize } from './eval-locomo'
+import { aggregate, buildRetriever, CATEGORY_NAMES, fuseRrf, parseLocoDate, tokenize, topByVector, type Frag } from './eval-locomo'
 import type { Claim } from '../src/engine/types'
 
 /* ---------------- mock 传输层：按消息全文内容路由预制响应（函数体可状态化） ---------------- */
@@ -621,7 +621,8 @@ function rementionFixture(): MuninnState {
     && byName.get('multi-hop')?.pass === false && byName.get('temporal')?.pass === true
     && byName.get('open-domain')?.pass === true && byName.get('adversarial')?.pass === null)
   check('总分 = 四类宏平均且不含 adversarial', Math.abs(agg.overall - (0.9 + 0.4 + 0.6 + 0.75) / 4) < 1e-9)
-  check('总分及格线 = 各类线之和', Math.abs(agg.overallBar - 0.9 * (0.6713 + 0.5115 + 0.5551 + 0.7293)) < 1e-9)
+  check('总分及格线 = 各类线宏平均（≈.5551）', Math.abs(agg.overallBar - (0.9 * (0.6713 + 0.5115 + 0.5551 + 0.7293)) / 4) < 1e-9)
+  check('总分判定同口径（宏平均 vs 宏平均线）', agg.overallPass === (agg.overall >= agg.overallBar))
 
   const mkFrag = (id: string, text: string) => {
     const tokens = tokenize(text)
@@ -636,6 +637,13 @@ function rementionFixture(): MuninnState {
   ])
   check('BM25 词法检索命中相关碎片', retrieve('What is the name of the cat Alice adopted?', 1)[0]?.id === 'D1:1')
   check('IDF 压低常用词：常见词查询不崩坏', retrieve('weather rainy portland', 1)[0]?.id === 'D1:2')
+
+  // 混合检索纯函数：向量路（预单位化 2 维向量）+ RRF 融合
+  const vFrags: Frag[] = [mkFrag('V1', 'alpha'), mkFrag('V2', 'beta'), mkFrag('V3', 'gamma')]
+  const vMat = [[1, 0], [0, 1], [0.9, 0.1]]
+  check('向量路取最近邻', topByVector(vFrags, vMat, [1, 0], 1)[0]?.id === 'V1')
+  const fused = fuseRrf([vFrags[0], vFrags[1]], [vFrags[1], vFrags[2]], 2)
+  check('RRF 双路命中者优先', fused[0]?.id === 'V2' && fused.length === 2)
 }
 
 /* ================= 场景五：LLM 全挂时的降级 ================= */

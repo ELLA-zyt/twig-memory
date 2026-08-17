@@ -8,7 +8,7 @@ import { setChatTransport } from '../src/engine/llm'
 import { readFileSync } from 'node:fs'
 
 /** 零依赖读取项目根目录 .env.local（与前端 vite 共用同一份密钥文件） */
-function loadEnvLocal(): void {
+export function loadEnvLocal(): void {
   try {
     const path = new URL('../.env.local', import.meta.url)
     const text = readFileSync(path, 'utf8')
@@ -21,18 +21,21 @@ function loadEnvLocal(): void {
   }
 }
 
-const TIMEOUT_MS = 15000
+/** 批量作答 prompt 较长（k×碎片 × 5 题），且异源模型可能是慢思考型，超时给足 */
+const TIMEOUT_MS = 60000
 /** 429 指数退避：5s / 10s / 20s / 40s（免费档 RPM 低，评测或反刍连发时会被限流） */
 const RETRY_BASE_MS = 5000
 const MAX_RETRIES = 4
 
-/** 注入直连传输层。无 KIMI_API_KEY 时返回 false，调用方应回退到规则判定。 */
+/** 注入直连传输层。无可用 key 时返回 false，调用方应回退到规则判定。
+ *  key 读取顺序：MUNINN_API_KEY（任意 OpenAI 兼容方）→ KIMI_API_KEY（历史命名） */
 export function registerNodeTransport(): boolean {
   loadEnvLocal()
-  const apiKey = process.env.KIMI_API_KEY
+  const apiKey = process.env.MUNINN_API_KEY || process.env.KIMI_API_KEY
   if (!apiKey) return false
   const model = process.env.MUNINN_MODEL || 'moonshot-v1-8k'
-  const baseUrl = process.env.MUNINN_BASE_URL || 'https://api.moonshot.cn'
+  // 归一化：容忍用户把 base 写成 .../v1（代码会自行拼接 /v1/chat/completions）
+  const baseUrl = (process.env.MUNINN_BASE_URL || 'https://api.moonshot.cn').replace(/\/+$/, '').replace(/\/v1$/, '')
 
   setChatTransport(async (messages, opts) => {
     let lastErr: unknown = null
@@ -62,12 +65,18 @@ export function registerNodeTransport(): boolean {
         }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const data = await resp.json()
-        const text = data?.choices?.[0]?.message?.content
-        if (typeof text !== 'string' || !text.trim()) throw new Error('empty response')
+        const raw = data?.choices?.[0]?.message?.content
+        if (typeof raw !== 'string' || !raw.trim()) throw new Error('empty response')
+        // 思考型模型（如 MiniMax-M3）会在 content 内联 <think>…</think>，且思考 token 计入
+        // max_tokens——预算不足时输出只剩半截思考。剥离后再返回，截断残留的空内容按失败重试。
+        const text = raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
+        if (!text) throw new Error('empty response after <think> strip（大概率 max_tokens 被思考耗尽）')
         return text
       } catch (err) {
         lastErr = err
-        throw err
+        // 4xx（非 429）是请求本身有问题，重试无意义，立即抛；网络/超时/思考截断按瞬态退避重试
+        if (err instanceof Error && /^HTTP 4\d\d/.test(err.message)) throw err
+        if (attempt >= MAX_RETRIES) throw err
       } finally {
         clearTimeout(timer)
       }
