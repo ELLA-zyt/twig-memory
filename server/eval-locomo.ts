@@ -13,7 +13,8 @@
  *
  * 及格线（债务⑨）：达到 mem0 基线的 90%+。参照（arXiv:2604.04853 Table 11，LLM-judge，
  * adversarial 不计分）：Mem0 = single-hop .6713 / temporal .5551 / multi-hop .5115 /
- * open-domain .7293 → 各类及格线 = 参照×0.9，总分及格线 = 四类及格线的宏平均 ≈ .5551。
+ * open-domain .7293 / 总分 .6688 → 各类及格线 = 参照×0.9；总分及格线 = 文档口径 .6688×0.9 ≈ .602
+ * （四类全跑时），子集跑按所选类别线的宏平均。
  *
  * 检索形态：默认 BM25 词法检索；--embed 开启混合检索（BM25 + 硅基流动向量，RRF 融合）。
  * 词法检索存在转述鸿沟（实测证据召回 k=10 仅 .52，k=30 封顶 .63），open-domain 尤其明显。
@@ -33,6 +34,8 @@ import { embedTexts, embeddingsAvailable } from './embed-node'
 /* ---------------- 参照基线（mem0 × 0.9 = 及格线） ---------------- */
 
 export const MEM0_REF = { 'single-hop': 0.6713, temporal: 0.5551, 'multi-hop': 0.5115, 'open-domain': 0.7293 }
+/** mem0 总分参照（同表总分口径）：文档及格线 = ×0.9 ≈ .602 */
+export const MEM0_OVERALL_REF = 0.6688
 
 /** LoCoMo category 编码 → 名称（对照数据分布：4=841 single-hop, 1=282 multi-hop, 2=321 temporal, 3=96 open-domain, 5=446 adversarial） */
 export const CATEGORY_NAMES: Record<number, string> = { 4: 'single-hop', 1: 'multi-hop', 2: 'temporal', 3: 'open-domain', 5: 'adversarial' }
@@ -62,8 +65,9 @@ export function aggregate(results: { category: number; correct: number }[]): { s
     }
   }
   const overall = n > 0 ? sum / n : 0
-  // 及格线同口径宏平均（此前误用求和，overall 永远越不过 2.22 的线，PASS 不可达）
-  const overallBar = n > 0 ? barSum / n : 0
+  // 总分及格线：四类全跑用文档口径（mem0 总分 ×0.9 ≈ .602）；子集跑退化为所选类别线的宏平均。
+  // （历史 bug：曾误用 barSum 求和 2.22 与宏平均相比，PASS 不可达）
+  const overallBar = n === 4 ? MEM0_OVERALL_REF * 0.9 : n > 0 ? barSum / n : 0
   return { stats, overall, overallBar, overallPass: overall >= overallBar }
 }
 

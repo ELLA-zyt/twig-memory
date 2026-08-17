@@ -621,7 +621,7 @@ function rementionFixture(): MuninnState {
     && byName.get('multi-hop')?.pass === false && byName.get('temporal')?.pass === true
     && byName.get('open-domain')?.pass === true && byName.get('adversarial')?.pass === null)
   check('总分 = 四类宏平均且不含 adversarial', Math.abs(agg.overall - (0.9 + 0.4 + 0.6 + 0.75) / 4) < 1e-9)
-  check('总分及格线 = 各类线宏平均（≈.5551）', Math.abs(agg.overallBar - (0.9 * (0.6713 + 0.5115 + 0.5551 + 0.7293)) / 4) < 1e-9)
+  check('总分及格线 = 文档口径（mem0 总分 .6688×0.9 ≈ .6019）', Math.abs(agg.overallBar - 0.6688 * 0.9) < 1e-9)
   check('总分判定同口径（宏平均 vs 宏平均线）', agg.overallPass === (agg.overall >= agg.overallBar))
 
   const mkFrag = (id: string, text: string) => {

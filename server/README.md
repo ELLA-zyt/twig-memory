@@ -43,6 +43,7 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 | POST | `/v1/window` | `{ userId, claimId, days? }` 开启对照窗口（仅 low 风险论断；设计债务⑤） |
 | POST | `/v1/intervene` | `{ userId, claimId?, text }` 宿主上报干预（内生标记，窗口校验时剔除被催生样本） |
 | POST | `/v1/correct` | `{ userId, fragmentId, note }` 事实层本人修正标注：原文不动，追加标注（债务⑥） |
+| POST | `/v1/chat` | `{ userId, text }` 参考宿主闭环：注入叙事上下文包 → 作答 → 代码自动 ingest（`server/host-loop.ts`；会话历史进程内缓冲，不落盘） |
 | GET | `/health` | 服务与判定模式（live / heuristic-only） |
 
 ## 远程 MCP（手机 App / 任意 MCP 客户端，无需装依赖）
@@ -274,7 +275,7 @@ mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径
 | ⑦ | contested 再提门槛 | **已清**：≥3 独立新证据 + 14 天冷却 + 邀请式措辞 + 两否封存 + 打地鼠双守卫 |
 | ⑧ | 冲突测试集规范 | **已清**：22 例类型学数据集 + 机械盲评 + `eval-counter.ts` 跑批（基线 100%） |
 | ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.640，双口径过线（宏平均 0.5551 / 文档口径 0.602），超 mem0 参照宏平均 0.617；open-domain 未过线，已立项 |
-| ⑪ | 合规声明文本 | **未做**：not-a-medical-device 等三件文本起草 |
+| ⑪ | 合规声明文本 | **已清**：not-a-medical-device / 情感数据最小化 / 命名惯例附则，见 [docs/COMPLIANCE.md](../docs/COMPLIANCE.md) |
 
 ## MVP 简化声明（后续迭代方向）
 

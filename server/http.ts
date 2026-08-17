@@ -13,6 +13,7 @@
  *   POST /v1/window { userId, claimId, days? } : 开启对照窗口（仅 low 风险论断，设计债务⑤）
  *   POST /v1/intervene { userId, claimId?, text } : 宿主上报干预（内生标记，窗口校验剔除）
  *   POST /v1/correct { userId, fragmentId, note } : 事实层本人修正标注（不改原文，债务⑥）
+ *   POST /v1/chat   { userId, text } : 参考宿主闭环（host-loop）：注入上下文包 → 作答 → 自动 ingest
  *
  * 远程 MCP（手机 App / 任意 MCP 客户端直接填 URL，无需装依赖）：
  *   /mcp            Streamable HTTP（新客户端优先，如 RikkaHub / Kelivo 新版）
@@ -40,6 +41,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { EngineManager } from './manager'
 import { registerNodeTransport } from './llm-node'
 import { createMcpServer } from './mcp-server'
+import { chatTurn } from './host-loop'
 
 const PORT = Number(process.env.PORT || 7300)
 const AUTH_TOKEN = process.env.MUNINN_AUTH_TOKEN || ''
@@ -196,6 +198,18 @@ const server = createServer(async (req, res) => {
       const ok = manager.get(uid).correctFragment(String(body.fragmentId ?? ''), String(body.note))
       manager.persist(uid)
       return send(res, ok ? 200 : 404, { ok: ok ? '本人修正标注已追加，原文未改动' : 'fragment 不存在' })
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/chat') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      const text = String(body.text ?? '').trim()
+      if (!uid || !text) return send(res, 400, { error: 'userId 和 text 必填' })
+      try {
+        return send(res, 200, await chatTurn(manager, uid, text))
+      } catch (err) {
+        return send(res, 503, { error: `宿主闭环失败：${err instanceof Error ? err.message : String(err)}` })
+      }
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/context') {

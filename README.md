@@ -83,7 +83,7 @@ src/
   components/    聊天面板、线索看板、记忆面板、主题切换等新艺术风格组件
 server/          服务端接入层：HeadlessMuninn 无头引擎、JSON 持久化、HTTP API、
                  MCP server（stdio + 远程端点）、冲突测试集与 LoCoMo 评测管线
-docs/            技术设计文档 v1.2（完整机制论证与设计债务总账）
+docs/            技术设计文档 v1.3（完整机制论证与设计债务总账）
 ```
 
 ## 当前进展（2026-08）
@@ -96,13 +96,13 @@ docs/            技术设计文档 v1.2（完整机制论证与设计债务总�
 ## Roadmap
 
 - [ ] open-domain 跨碎片推断（0.531 vs mem0 参照 0.729）：LoCoMo 唯一未过线类别，下一个工程靶子；先跑消融对照（`--no-embed` / `--no-hyde`）与金标证据命中率分析，再动结构
-- [ ] 设计债务⑪：合规声明文本起草（not-a-medical-device 等三件）
+- [x] 设计债务⑪：合规声明文本起草（not-a-medical-device / 情感数据最小化 / 命名惯例附则 → [docs/COMPLIANCE.md](docs/COMPLIANCE.md)）
 - [ ] 评测系统「衔枝」独立化：冲突测试集已落地，待扩场景类型学与独立盲评流程
 - [ ] embedding 向量预筛替换引擎碰撞的字符重合近似（评测检索层已接入向量，引擎侧接口位置已留注）
 
 ## 文档与许可
 
-- 技术设计文档：[docs/雾尼Muninn-技术设计文档-v1.2.md](docs/雾尼Muninn-技术设计文档-v1.2.md)
+- 技术设计文档：[docs/雾尼Muninn-技术设计文档-v1.3.md](docs/雾尼Muninn-技术设计文档-v1.3.md)
 - 合规声明（不是医疗设备 / 情感数据最小化）：[docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - 危机协议全文（可审计的行为契约）：[docs/CRISIS-PROTOCOL.md](docs/CRISIS-PROTOCOL.md)
 - License：[MIT](LICENSE) — 其中理念渊源部分基于 OpenClaw 记忆系统框架合规重构（MIT，保留许可声明），三层架构（尤其线索层、认识层）为首次提出的独立实现
