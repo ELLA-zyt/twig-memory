@@ -25,3 +25,4 @@ server/data/
 *.njsproj
 *.sln
 *.sw?
+server/eval-data/

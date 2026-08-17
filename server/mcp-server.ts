@@ -68,5 +68,86 @@ export function createMcpServer(manager: EngineManager): McpServer {
     },
   )
 
+  server.registerTool(
+    'memory_reflect',
+    {
+      description: '触发反刍节律：从近期碎片抽取/改写认知层论断（证据锚定 + 版本史）、异源红队反证搜索、重生成被推进线索的合成句、执行 merge/split 判定。建议每天一次或在批量事件后调用。',
+      inputSchema: { userId: z.string().describe('用户标识') },
+    },
+    async ({ userId }) => {
+      const result = await manager.get(userId).reflect()
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
+  server.registerTool(
+    'memory_audit',
+    {
+      description: '盲推导审计：不给模型看当前认识层，只从原始碎片从零重推理解，与现行版本对照。多次盲推导建立自然方差基线（null model），超基线的分歧才算漂移信号；分歧过大时结果会标记 flaggedForUser 并出现在 memory_context 的警示里。建议低频调用（如每周一次）。',
+      inputSchema: { userId: z.string().describe('用户标识') },
+    },
+    async ({ userId }) => {
+      try {
+        const result = await manager.get(userId).auditDrift()
+        manager.persist(userId)
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+      } catch (err) {
+        return { content: [{ type: 'text', text: `审计失败：${err instanceof Error ? err.message : String(err)}` }], isError: true }
+      }
+    },
+  )
+
+  server.registerTool(
+    'memory_start_window',
+    {
+      description: '为一low风险论断开启对照窗口（自我实现预言断路器）：窗口期内请勿基于该论断对用户做任何提醒/催促/建议，系统将用无干预期的干净证据重新校验它。高风险论断（健康/安全相关）会被拒绝。窗口到期在 reflect 时自动校验。',
+      inputSchema: {
+        userId: z.string().describe('用户标识'),
+        claimId: z.string().describe('论断 ID（memory_list_claims 可查）'),
+        days: z.number().optional().describe('窗口天数（2-14，默认 7）'),
+      },
+    },
+    async ({ userId, claimId, days }) => {
+      const result = await manager.get(userId).startWindow(claimId, days ?? 7)
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: result.detail }], isError: !result.ok }
+    },
+  )
+
+  server.registerTool(
+    'memory_note_intervention',
+    {
+      description: '上报一次你基于某论断对用户采取的干预（内生标记）：如基于「她拖延」提醒了 deadline。被干预催生的行为不算验证该论断的干净证据，对照窗口校验时会剔除干预后 48h 内的样本。',
+      inputSchema: {
+        userId: z.string().describe('用户标识'),
+        claimId: z.string().optional().describe('相关论断 ID（如有）'),
+        text: z.string().describe('干预内容描述（做了什么）'),
+      },
+    },
+    async ({ userId, claimId, text }) => {
+      const ok = manager.get(userId).noteIntervention(claimId, text)
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: ok ? '干预已记录（内生标记）' : '记录失败' }] }
+    },
+  )
+
+  server.registerTool(
+    'memory_correct_fragment',
+    {
+      description: '事实层本人修正标注：用户指出某条事件记录有误时使用。原文永不改动（改了就是改写历史），只追加修正标注；此后所有判定都会看到修正后的事实（〔本人修正：…〕）。',
+      inputSchema: {
+        userId: z.string().describe('用户标识'),
+        fragmentId: z.string().describe('碎片 ID'),
+        note: z.string().describe('本人的修正说明（以用户口吻）'),
+      },
+    },
+    async ({ userId, fragmentId, note }) => {
+      const ok = manager.get(userId).correctFragment(fragmentId, note)
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: ok ? '修正标注已追加，原文未改动' : `fragment ${fragmentId} 不存在` }], isError: !ok }
+    },
+  )
+
   return server
 }

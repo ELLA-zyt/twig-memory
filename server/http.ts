@@ -8,6 +8,11 @@
  *   GET  /v1/claims?userId=   : 认知层论断列表（用户可见）
  *   POST /v1/contest { userId, claimId, note } : 用户否决 → contested（非删除）
  *   POST /v1/counter { userId, claimId, text } : 矛盾响应判定（LLM）
+ *   POST /v1/reflect { userId } : 反刍（认识层抽取/改写 + 反证搜索 + 合成句重生成 + merge/split）
+ *   POST /v1/audit  { userId } : 盲推导审计（null model 基线 + 漂移信号 + 用户可见标记）
+ *   POST /v1/window { userId, claimId, days? } : 开启对照窗口（仅 low 风险论断，设计债务⑤）
+ *   POST /v1/intervene { userId, claimId?, text } : 宿主上报干预（内生标记，窗口校验剔除）
+ *   POST /v1/correct { userId, fragmentId, note } : 事实层本人修正标注（不改原文，债务⑥）
  *
  * 远程 MCP（手机 App / 任意 MCP 客户端直接填 URL，无需装依赖）：
  *   /mcp            Streamable HTTP（新客户端优先，如 RikkaHub / Kelivo 新版）
@@ -21,6 +26,13 @@
  *   MUNINN_AUTH_TOKEN  强烈建议在公网配置；配置后所有 API/MCP 请求需带
  *                      Authorization: Bearer <token> 或 ?token=<token>
  *   MUNINN_DATA_DIR    持久化目录，默认 server/data（云部署时挂卷到此路径）
+ *   MUNINN_AUTO_REFLECT   可选，=1 时进程内定时反刍（默认关闭；手动 POST /v1/reflect 为主）
+ *   MUNINN_REFLECT_INTERVAL_HOURS  可选，自动反刍间隔小时数，默认 24
+ *   MUNINN_ADVERSARY_MODEL 可选，反证红队专用的第二模型名（设计债务③ 真异源；
+ *                          缺省同模型，靠 persona + 高温异源）
+ *   MUNINN_AUDIT_INTERVAL_DAYS 可选，reflect 内自动盲推导审计的间隔天数（默认 7；0 关闭）
+ *   MUNINN_AUDIT_SAMPLES  可选，盲推导抽样次数（默认 3，2-5 之间）
+ *   MUNINN_AUTO_WINDOW    可选，=1 时 reflect 自动为最高置信的 low 风险论断开启对照窗口（默认关）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
@@ -136,6 +148,56 @@ const server = createServer(async (req, res) => {
       return send(res, result.ok ? 200 : 400, result)
     }
 
+    if (req.method === 'POST' && url.pathname === '/v1/reflect') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid) return send(res, 400, { error: 'userId 必填' })
+      const result = await manager.get(uid).reflect()
+      manager.persist(uid)
+      return send(res, 200, result)
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/audit') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid) return send(res, 400, { error: 'userId 必填' })
+      try {
+        const result = await manager.get(uid).auditDrift()
+        manager.persist(uid)
+        return send(res, 200, result)
+      } catch (err) {
+        return send(res, 503, { error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/window') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid) return send(res, 400, { error: 'userId 必填' })
+      const days = Number(body.days ?? 7) || 7
+      const result = await manager.get(uid).startWindow(String(body.claimId ?? ''), days)
+      manager.persist(uid)
+      return send(res, result.ok ? 200 : 400, result)
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/intervene') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid || !body.text) return send(res, 400, { error: 'userId 和 text 必填' })
+      const ok = manager.get(uid).noteIntervention(body.claimId ? String(body.claimId) : undefined, String(body.text))
+      manager.persist(uid)
+      return send(res, ok ? 200 : 400, { ok })
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/correct') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid || !body.note) return send(res, 400, { error: 'userId 和 note 必填' })
+      const ok = manager.get(uid).correctFragment(String(body.fragmentId ?? ''), String(body.note))
+      manager.persist(uid)
+      return send(res, ok ? 200 : 404, { ok: ok ? '本人修正标注已追加，原文未改动' : 'fragment 不存在' })
+    }
+
     if (req.method === 'GET' && url.pathname === '/v1/context') {
       if (!userId) return send(res, 400, { error: 'userId 必填' })
       const packet = manager.get(userId).getContextPacket(userId)
@@ -163,3 +225,17 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[muninn] HTTP ready: http://localhost:${PORT} (llm: ${llmReady ? 'live' : 'heuristic-only'}, auth: ${AUTH_TOKEN ? 'on' : 'off'})`)
 })
+
+/* ---------- 可选：进程内定时反刍（MUNINN_AUTO_REFLECT=1 开启） ----------
+ * 默认关闭——反刍节奏交给宿主（POST /v1/reflect 或 MCP memory_reflect）更可控。
+ * 开启后仅覆盖已加载进内存的用户（EngineManager 惰性加载，不做全目录扫描）。 */
+if (process.env.MUNINN_AUTO_REFLECT === '1') {
+  const hours = Number(process.env.MUNINN_REFLECT_INTERVAL_HOURS || 24)
+  const intervalMs = Math.max(1, hours) * 3600_000
+  console.log(`[muninn] auto-reflect enabled: every ${hours}h (loaded users only)`)
+  setInterval(() => {
+    for (const uid of manager.loadedUserIds()) {
+      manager.get(uid).reflect().then(() => manager.persist(uid)).catch(() => { /* 单用户失败不影响其他 */ })
+    }
+  }, intervalMs)
+}

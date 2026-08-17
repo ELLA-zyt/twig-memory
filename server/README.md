@@ -6,11 +6,11 @@
 
 ```
 server/
-  core.ts       HeadlessMuninn：碎片/线索/认知三层状态机 + 碰撞判定 + 叙事上下文包
+  core.ts       HeadlessMuninn：碎片/线索/认知三层状态机 + 碰撞判定 + SILENT 池 + 反刍节律（reflect）+ 叙事上下文包
   store.ts      JSON 文件持久化（每用户一文件，tmp+rename 原子写；可换 SQLite/Postgres）
   manager.ts    多用户引擎管理：按需加载、变更落盘
   llm-node.ts   Node 端直连 Moonshot（注入到 src/engine/llm 的传输层）
-  http.ts       HTTP API（零依赖 node:http）
+  http.ts       HTTP API（零依赖 node:http）+ 远程 MCP 端点
   mcp.ts        MCP server（stdio，Codex / Claude Code 等可直接挂载）
 ```
 
@@ -38,6 +38,11 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 | GET | `/v1/claims?userId=` | 认知层论断列表（用户默认全透明可见） |
 | POST | `/v1/contest` | `{ userId, claimId, note }` 用户否决 → contested（不删除、不假改） |
 | POST | `/v1/counter` | `{ userId, claimId, text }` 矛盾响应判定（LLM，需 key） |
+| POST | `/v1/reflect` | `{ userId }` 反刍：认识层抽取/改写 + 反证搜索（异源红队）+ 合成句重生成 + merge/split（LLM，需 key） |
+| POST | `/v1/audit` | `{ userId }` 盲推导审计：null model 基线 + 漂移信号 + 用户可见标记（LLM，需 key） |
+| POST | `/v1/window` | `{ userId, claimId, days? }` 开启对照窗口（仅 low 风险论断；设计债务⑤） |
+| POST | `/v1/intervene` | `{ userId, claimId?, text }` 宿主上报干预（内生标记，窗口校验时剔除被催生样本） |
+| POST | `/v1/correct` | `{ userId, fragmentId, note }` 事实层本人修正标注：原文不动，追加标注（债务⑥） |
 | GET | `/health` | 服务与判定模式（live / heuristic-only） |
 
 ## 远程 MCP（手机 App / 任意 MCP 客户端，无需装依赖）
@@ -73,7 +78,7 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
 # env = { KIMI_API_KEY = "sk-..." }
 ```
 
-工具：`memory_ingest` / `memory_context` / `memory_list_claims` / `memory_contest_claim`。
+工具：`memory_ingest` / `memory_context` / `memory_list_claims` / `memory_contest_claim` / `memory_reflect` / `memory_audit` / `memory_start_window` / `memory_note_intervention` / `memory_correct_fragment`。
 
 ## 部署到 Zeabur（作为记忆后端）
 
@@ -97,10 +102,174 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
 2. 每轮对话开始前（或定期）取 `memory_context`，把 `promptText` 注入 system prompt——
    拿到的是「叙事上下文包」：进行中的线索 + 当前理解（带置信度）+ 近期事件，不是 top-k 卡片。
 3. 用户要求查看/更正记忆时，用 `memory_list_claims` / `memory_contest_claim`。
+4. 每天一次（或批量事件后）调用 `memory_reflect` / `POST /v1/reflect` 反刍：
+   认知层自动抽取/改写（带证据锚定与版本史）、异源红队反证搜索、被推进线索的合成句重生成、merge/split 判定。
+   SILENT 池无需反刍——入池在 tick 内自动判定，唤醒由 ingest 时的触发器检测完成。
+5. 低频调用 `memory_audit` / `POST /v1/audit` 做盲推导审计（reflect 也会按
+   `MUNINN_AUDIT_INTERVAL_DAYS`，默认 7 天，自动附带一次）。
+6. 自我实现预言防护：你基于某条论断对用户采取了干预（提醒/催促/建议）后，
+   `memory_note_intervention` 上报一次（内生标记）；可为 low 风险论断开
+   `memory_start_window` 对照窗口——窗口期内 `promptText` 会指示你**不要**基于
+   该论断干预，窗口到期由 reflect 自动校验（详见下节）。
+
+## 行为要点（SILENT 池，§4.5）
+
+- **入池**（自动）：线索曾活跃（≥2 次事件）、情感权重 ≥0.7、≥21 天无推进且存在 ≥45 天 → 推入 SILENT，跳过龙脉衰减（不因沉默降权）。
+- **隔离**：SILENT 线索不参与碰撞候选（LLM 与规则路径一致）、不出现在叙事上下文包中。
+- **唤醒**：主碰撞无命中时做一次唤醒判定（LLM 优先，字符重合 ≥0.5 兜底），命中即回 ACTIVE 并记入事件历史。
+- 已知近似：设计文档的三信号（骤停 + 高情感 + 话题转移）中，话题转移无法从碎片层观测，
+  以保守条件接受虚警率（设计债务②）。
+
+## 反证搜索（§5.2 确认偏误对策 · 设计债务③）
+
+`/v1/reflect` 内置异源反证搜索，对每条 active 论断（被挑战次数少者优先，上限 5 条/轮）：
+
+1. **红队攻击**：以「检察官」persona + 温度 0.8 生成反面假设（论断在什么情形下会是错的），并按 HyDE 反用从近 40 条碎片中选出支持反面假设或直接反驳论断的证据——与论断作者（认识层 persona、温度 0.3）刻意异源。找不到反证就诚实空手而归，不许硬凑。
+2. **强制裁决留痕**：每条命中反证必须被显式回应——推翻 / 加限定 / 写明为什么不足以推翻，说明写入 `counterEvidence`，不许悄悄吞掉。
+3. **防教条化**：反证全部被「解释掉」时，代码强制置信度小幅衰减（-0.03，不信任 LLM 自律）；论断未改动也留版本记录，衰减可审计。
+
+异源配置：默认同模型 persona+温度异源；设置 `MUNINN_ADVERSARY_MODEL`（如 `moonshot-v1-32k`）
+可让红队用第二模型，实现真正的模型异源。这是设计债务③的**缓解而非根治**——同源数据下
+的自我对抗天花板依然存在，已写进局限性。
+
+## 盲推导审计（§5.2 渐进漂移对策 · 设计债务④ null model）
+
+`POST /v1/audit` / MCP `memory_audit` / reflect 内定期自动触发（默认 7 天一次，系统排程，
+不等用户发起——人和系统活在同一套缓慢扭曲的叙事里时，双方都不会觉得有必要审计）：
+
+1. **盲推导**：不给模型看认识层当前版本，只给原始碎片（近 40 条），从零重新生成理解。
+   盲推导不继承现行理解里的渐进漂移——信息不对称即审计本身。
+2. **null model 基线（债务④的核心）**：盲推导抽样 k 次（`MUNINN_AUDIT_SAMPLES`，默认 3），
+   两两分歧取最大值作为自然方差上界。**当前认识层与各盲推导的最小分歧（对现行版本最
+   宽容的一次比较）超过「基线 + 0.15」才算漂移信号**——否则审计系统自己虚警。
+3. **用户可见标记（§5.4 可见性出口）**：分歧幅度本身是独立信号——绝对分歧 ≥0.6 时
+   `flaggedForUser` 置位，并在叙事上下文包（`promptText`）注入邀请式核对提示
+   （「我注意到我对你的理解最近有些对不上……」），让宿主在对话中自然浮出，直到下一次
+   审计刷新。审计历史（最近 20 条）存于 state，全量对用户透明。
+
+已知边界：分歧评估与盲推导同用 Moonshot 模型，judge 噪声由「取最小分歧 + max 基线 + 0.15
+余量」三重保守面吸收；漂移定位（按历史版本时间戳二分重建碎片子集比对）未实现，当前只有
+检测与标记，不定位漂移发生点。
+
+## 对照窗口（§5.3 自我实现预言断路器 · 设计债务⑤ 风险分级）
+
+打破「认识影响回复、回复影响行为、行为反过来『验证』认识」的闭环——给系统自己的信念
+留一次干净的反事实检验：
+
+1. **开窗**（`POST /v1/window` / MCP `memory_start_window`）：选定一条论断，窗口期内
+   （2-14 天，默认 7）系统不基于它干预。**叙事上下文包会注入「请勿基于该论断主动提醒/
+   催促/建议」的指令**——引擎无法强制宿主，只能指令 + 内生标记自证（宿主干预请上报
+   `/v1/intervene`）。
+2. **风险分级（债务⑤的核心）**：高风险事项永不参与对照——「明知可能受伤也不提醒」
+   的伦理代价不可接受。双重分级：高风险词表（医院/失眠/自杀/债务等，命中即拒，不经
+   LLM，fail-safe）+ LLM 分级兜底（LLM 不可用时保守判 medium 拒绝）。仅 `low` 可开窗。
+3. **内生标记**：宿主每上报一次干预，窗口校验时剔除干预后 48h 内被催生的碎片样本
+   （被催三次才交，证明的是催促起了作用，不是论断本身）。
+4. **危机中止阀**：窗口期内 ingest 命中危机信号词（自杀/自残/不想活等）→ 立即中止
+   全部对照窗口、恢复正常干预——对照永远让位于用户福祉，写在架构里。
+5. **到期校验**（reflect 自动）：只用窗口期内干净碎片判定——confirmed → 置信微升
+   （+0.03）留版本；failed → 反证留痕（「对照窗口反证」）+ 加限定重写或强制降置信；
+   证据不足 → inconclusive 关窗不改动。LLM 不可用时窗口顺延，不误判。
+6. **自动开窗**：默认关闭；`MUNINN_AUTO_WINDOW=1` 时 reflect 自动为从未进过窗口的
+   最高置信 low 风险论断开窗（最 load-bearing 的信念优先过堂）。
+
+已知边界：窗口指令依赖宿主自觉遵守 + 干预上报的诚实性（架构边界，引擎在宿主外部）；
+风险词表是保守近似，宁拒开窗不冒险。
+
+## 修正标注与再提门槛（§5.4 · 设计债务⑥⑦）
+
+**事实层本人修正（债务⑥）**：`POST /v1/correct` / MCP `memory_correct_fragment`。
+碎片原文永不改动（改了就是改写历史），只追加 `correction` 标注；所有 LLM 判定
+（认识层抽取、红队反证、盲推导、窗口校验、再提判定）经统一的碎片视图看到
+`〔本人修正：…〕`——判定基于修正后的事实，历史保留原始记录。
+
+**contested 再提（债务⑦，量化）**：`contestClaim` 每次否决累积计数 + 旧证据快照；
+再提必须同时满足三个条件，缺一不可：
+
+1. **独立新证据 ≥3 条**（高于创建门槛的 2）：否决日之后入库、不在旧证据快照内、
+   且经独立证据判定确认能单独支撑该论断的碎片；
+2. **冷却 14 天**：否决后至少两周内绝不再提；
+3. **邀请式措辞**：达门槛后由再提议草模块生成邀请文本（「我最近又注意到……是我理
+   解错了吗？」），注入叙事上下文包，由宿主在容得下反驳的对话时机提出——不是
+   重申式断言。
+
+**防打地鼠（双重设防）**：认识层抽取的输入包含被否决清单（prompt 约束不得基于原
+证据重新生成相近观察）+ 代码硬守卫（create 操作的证据全部落在某条被否决论断的旧
+证据快照内 → 直接拒绝）。
+
+**防纠缠（两否封存）**：同一条论断被否决 2 次即永久退出再提通道，无论后续证据多
+少；每次新否决都会使既有邀请作废、冷却期重置。
+
+## 评测：冲突响应测试集（§6.2 · 设计债务⑧）
+
+```bash
+npx tsx server/eval-counter.ts             # 22 例全量（真实 LLM，读 .env.local）
+npx tsx server/eval-counter.ts --limit 4   # 调试子集
+npx tsx server/eval-counter.ts --judge     # 追加独立 LLM 盲评
+```
+
+构造规范（`server/eval-counter.ts` 即规范的可执行形式）：场景类型学 4 类
+（事实冲突/偏好反转/能力变化/关系变化）× 5 例 + 无冲突负例 × 2，共 22 例。
+盲评流程：评分只看**结构化状态迁移**（发现冲突 / 降低置信 / 修改认识或留痕），
+由代码机械判定，期望值不出现在任何被测模型可见的上下文——杜绝「你出题你答题」；
+过程评测不判「改得对不对」。传输层带 429 指数退避，跑批不会被限流打断。
+
+基线（moonshot-v1-8k，2026-08）：**22/22（100%）**，冲突场景平均置信下调 0.11-0.25。
+第一轮曾发现负例误报（日常琐事被过度解读为冲突），已在判定 prompt 中加防过度解读
+约束后修复——评测集的第一笔真实产出。
+
+## 评测：LoCoMo 事实底盘基线（§6.4 · 设计债务⑨）
+
+```bash
+# 数据（2.8MB，一次性）
+curl -sL https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json \
+  -o server/eval-data/locomo10.json
+
+npx tsx server/eval-locomo.ts --convos 10          # 全量 1986 题
+npx tsx server/eval-locomo.ts --convos 1           # 单会话子集（~200 题）
+npx tsx server/eval-locomo.ts --convos 1 --cats 4 --limit 10   # 微试点
+npx tsx server/eval-locomo.ts --no-hyde            # 关闭 HyDE 扩查询（消融对照）
+```
+
+管线定位：**事实底盘 = 碎片层 + 检索**（LoCoMo 测「记不记得」，不测「理解了吗」，
+与叙事层评测分工）。全部轮次直灌碎片库（零 LLM）→ 每题检索 top-k → LLM 仅凭检索
+碎片作答（检索不到就拒答）→ 独立 LLM 判分（adversarial 用「正确拒答才算对」判据）。
+
+检索 = **BM25 词元检索 + HyDE 批量扩查询**（问题先改写成假想证据碎片再检索，弥合
+转述鸿沟；仍是零向量，embedding 到位后替换 `buildRetriever` 即可，作答/判分管线不变）。
+及格线 = mem0 基线 × 90%（参照 arXiv:2604.04853 Table 11，LLM-judge，adversarial 单列）：
+single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 / 总分 ≥.602。
+
+限流注意：LoCoMo 的 prompt 远大于冲突评测，免费档 TPM 很容易撞墙。管线已做三重防护
+（传输层 429 指数退避、批处理 10/5/5、批级二次重试），`--pace`（默认 12 秒）可再调慢；
+批调用失败数会在结果尾部如实上报（expand 失败只损失 HyDE 增量，answer/judge 失败
+计 0 分并在明细中留 `__LLM_FAILED__`）。
+
+检索诊断（零 LLM，金标证据命中率）：`buildRetriever` 为纯函数，可直接对
+`qa.evidence` 做命中率分析——BM25 top-8 证据命中 single-hop 约 54-60%，
+是当前事实底盘的主要瓶颈（转述鸿沟），HyDE 即为此而设。
+
+## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
+
+| # | 债务 | 状态 |
+|---|---|---|
+| ① | 龙脉值冷启动死循环 | **已清**：龙脉只做相对排序，登记准入从不看龙脉；top-12 候选截断对新登记线索（历史=1）保底放行 |
+| ② | avoidance 三信号门槛 | **部分缓解**：服务端按「曾活跃+高情感+久沉默」规则入池；话题转移信号无法从碎片层观测（已声明） |
+| ③ | 异源反证生成 | **已清**（缓解级）：红队 persona+高温异源，`MUNINN_ADVERSARY_MODEL` 可配第二模型 |
+| ④ | 盲推导 null model | **已清**：k 次抽样自然方差基线 + 三重保守面；漂移定位（二分重建）未做 |
+| ⑤ | 对照窗口风险分级 | **已清**：词表+LLM 双重分级、内生标记、危机中止阀、到期校验 |
+| ⑥ | 事实层修正标注 | **已清**：`/v1/correct`，原文不动，判定层经 fragView 见修正后事实 |
+| ⑦ | contested 再提门槛 | **已清**：≥3 独立新证据 + 14 天冷却 + 邀请式措辞 + 两否封存 + 打地鼠双守卫 |
+| ⑧ | 冲突测试集规范 | **已清**：22 例类型学数据集 + 机械盲评 + `eval-counter.ts` 跑批（基线 100%） |
+| ⑨ | LoCoMo 及格线量化 | **管线已建**（`eval-locomo.ts`：BM25+HyDE 检索、批量作答判分、mem0×0.9 对照）；基线数据见评测节 |
+| ⑪ | 合规声明文本 | **未做**：not-a-medical-device 等三件文本起草 |
 
 ## MVP 简化声明（后续迭代方向）
 
-- 合成句暂用规则生成，碰撞预筛用字符重合度近似；embedding 到位后替换 `core.ts` 里的 `charOverlap`。
-- 龙脉值按自然日衰减（0.03/天），线索被命中时回升；反刍节律（merge/split）尚未在服务端实现。
-- 认知层论断的自动抽取未做——当前通过 `/v1/counter` 支持矛盾响应改写，论断创建接口待加。
+- 碰撞预筛用字符重合度近似，LLM 候选按龙脉值 top-12 截断（新线索保底放行，债务①）；embedding 到位后替换 `core.ts` 里的 `charOverlap` 与截断（防线在 adjudication 层，向量只是预筛加速器）。
+- 认知层反刍抽取与反证搜索（异源红队 + 强制裁决留痕 + 防教条化衰减）已实现（`/v1/reflect`）；用户自述反证走 `/v1/counter`。
+- 盲推导审计已实现（null model 基线 + 漂移信号 + 用户可见标记，`/v1/audit`）；漂移定位（历史版本二分重建）未实现。
+- 对照窗口已实现（风险分级 + 内生标记 + 危机中止阀 + 到期校验，`/v1/window`）；窗口指令依赖宿主遵守（架构边界）。
+- 事实层修正标注（债务⑥）与 contested 再提门槛/防纠缠（债务⑦）已实现；再提门槛的「独立新证据」判定与邀请措辞为 LLM 判断，幻觉 id 均经代码过滤。
+- merge/split 已实现（共享碎片 ≥2 触发 merge 判定、回收条件分化触发 split），但反刍无自动排程——`MUNINN_AUTO_REFLECT=1` 开启进程内定时（仅覆盖已加载用户），否则宿主手动调用。
 - 存储为单文件 JSON，多实例部署需换共享存储。

@@ -25,4 +25,9 @@ export class EngineManager {
       e.markClean()
     }
   }
+
+  /** 当前已加载进内存的用户（自动反刍用；不做全目录扫描） */
+  loadedUserIds(): string[] {
+    return [...this.engines.keys()]
+  }
 }

@@ -14,6 +14,12 @@ export interface VAD {
 
 export type FragmentId = string
 
+/** 事实层本人修正标注（§5.4 设计债务⑥）：不改原文，只追加——改了就是改写历史 */
+export interface FragmentCorrection {
+  at: string
+  note: string
+}
+
 export interface Fragment {
   id: FragmentId
   day: number          // 距今天数，0 = 今天
@@ -23,6 +29,7 @@ export interface Fragment {
   vad: VAD
   threadIds: string[]  // 关联线索
   tags: string[]       // 情境标签（碰撞时分池物理隔离）
+  correction?: FragmentCorrection
 }
 
 /* ---------------- 线索层（general events / 草蛇灰线系统） ---------------- */
@@ -94,6 +101,19 @@ export interface CounterEvidence {
   resolution: string        // 「为什么这条反证不足以推翻」——不许悄悄吞掉
 }
 
+/** 风险分级（§5.3 设计债务⑤）：高风险事项永不参与对照窗口——「明知可能受伤也不提醒」的伦理代价不可接受 */
+export type RiskLevel = 'low' | 'medium' | 'high'
+
+/** 对照窗口（§5.3 断路器三）：系统主动不干预期，为信念收集干净的反事实证据 */
+export interface ControlWindow {
+  startedAt: string
+  endsAt: string
+  status: 'open' | 'confirmed' | 'failed' | 'inconclusive' | 'aborted'
+  closedAt?: string
+  /** 窗口结论说明（干净样本数 / 内生排除数 / 中止原因） */
+  note?: string
+}
+
 export interface Claim {
   id: string
   docTitle: string
@@ -105,6 +125,15 @@ export interface Claim {
   versions: ClaimVersion[]  // 版本史：改写留痕
   status: 'active' | 'contested'
   contestedNote?: string
+  riskLevel?: RiskLevel     // 风险分级（§5.3）：仅 low 可进对照窗口；缺省时惰性分级
+  window?: ControlWindow    // 对照窗口记录（终态保留，可追溯）
+  /** 被否决次数（§5.4 设计债务⑦ 防纠缠）：≥2 次永久封存，不再进入再提通道 */
+  vetoCount?: number
+  lastVetoedAt?: string
+  /** 否决时的证据快照（累积）：同一批旧证据不得单独支撑再提或重新生成（防打地鼠） */
+  vetoedEvidenceIds?: FragmentId[]
+  /** 再提邀请（达门槛后生成；宿主以邀请式措辞在对话中提出，再被否决即永久封存） */
+  rementionInvitation?: { at: string; text: string; newEvidenceIds: FragmentId[] }
 }
 
 /* ---------------- 引擎日志 ---------------- */
