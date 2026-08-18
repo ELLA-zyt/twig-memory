@@ -1416,7 +1416,7 @@
   }
 
   // ========== 认知画像面板 ==========
-  function toggleClaim() {
+  window.toggleClaim = function () {
     const panel = document.getElementById('claimPanel');
     const mask = document.getElementById('claimMask');
     if (panel.classList.contains('show')) {
