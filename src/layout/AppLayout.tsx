@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import {
-  Bell, BookOpen, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, ShieldCheck,
+  Bell, BookOpen, EllipsisVertical, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, ShieldCheck,
 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useEngine } from '../state/EngineContext'
 import { TwigMark, VineDivider } from '../components/nouveau'
@@ -78,13 +81,25 @@ function EngineCard() {
           <span className={cn('w-1 h-1 rounded-full', state.liveMode ? 'bg-[hsl(38_52%_60%)]' : 'bg-[hsl(44_16%_55%)]')} />
           {state.liveMode ? '实时推理' : '预计算'}
         </button>
-        <button
-          onClick={() => engine.reset()}
-          title="重置引擎状态"
-          className="h-7 w-7 rounded-full border border-[hsl(44_16%_45%/0.5)] text-[hsl(44_16%_62%)] hover:text-[hsl(12_48%_62%)] hover:border-[hsl(12_48%_55%/0.6)] transition-colors flex items-center justify-center"
-        >
-          <RefreshCw size={11} />
-        </button>
+        {/* shadcn DropdownMenu：键盘导航 + 焦点管理；覆盖层改主题色 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              title="引擎操作"
+              className="h-7 w-7 rounded-full border border-[hsl(44_16%_45%/0.5)] text-[hsl(44_16%_62%)] hover:text-[hsl(38_52%_62%)] hover:border-[hsl(38_52%_55%/0.6)] transition-colors flex items-center justify-center"
+            >
+              <EllipsisVertical size={11} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--card))] text-foreground shadow-lg">
+            <DropdownMenuItem
+              onClick={() => engine.reset()}
+              className="text-xs text-[hsl(12_48%_62%)] focus:bg-[hsl(12_48%_55%/0.1)] focus:text-[hsl(12_48%_62%)] cursor-pointer"
+            >
+              <RefreshCw size={12} className="mr-2" /> 重置引擎状态
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

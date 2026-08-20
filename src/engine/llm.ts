@@ -51,11 +51,31 @@ export async function moonshotChat(
   }
 }
 
-/** 从模型输出中提取第一个 JSON 对象 */
+/**
+ * 从模型输出中提取第一个 JSON 对象。
+ * P2-7 修复：平衡括号扫描替代贪婪正则——贪婪正则 \{[\s\S]*\} 在模型输出含多个 {} 时
+ * 会捕获从首个 { 到末个 } 的整段（含中间非 JSON 文本），导致 parse 失败。
+ * 平衡扫描正确处理嵌套、字符串内的括号、转义字符。
+ */
 export function extractJson<T>(raw: string): T | null {
-  const m = raw.match(/\{[\s\S]*\}/)
-  if (!m) return null
-  try { return JSON.parse(m[0]) as T } catch { return null }
+  const start = raw.indexOf('{')
+  if (start < 0) return null
+  let depth = 0, inStr = false, esc = false
+  for (let i = start; i < raw.length; i++) {
+    const c = raw[i]
+    if (esc) { esc = false; continue }
+    if (c === '\\') { esc = true; continue }
+    if (c === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) {
+        try { return JSON.parse(raw.slice(start, i + 1)) as T } catch { return null }
+      }
+    }
+  }
+  return null
 }
 
 const clamp01 = (v: unknown): number | null =>

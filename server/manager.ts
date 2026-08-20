@@ -1,5 +1,7 @@
 /**
  * 多用户引擎管理：按需加载、惰性实例化、变更后落盘。
+ * P1-1 修复：per-user 异步锁——reflect/ingest/counterCheck 等含 await 的操作
+ * 在并发调用时会因控制权交出而状态突变；withLock 保证同一用户的操作串行执行。
  */
 import { HeadlessMuninn, type MuninnState } from './core'
 import { JsonStore } from './store'
@@ -7,6 +9,8 @@ import { JsonStore } from './store'
 export class EngineManager {
   private engines = new Map<string, HeadlessMuninn>()
   private store = new JsonStore<MuninnState>()
+  /** P1-1：per-user Promise 链，串行化含 await 的引擎操作 */
+  private locks = new Map<string, Promise<unknown>>()
 
   get(userId: string): HeadlessMuninn {
     let e = this.engines.get(userId)
@@ -15,6 +19,28 @@ export class EngineManager {
       this.engines.set(userId, e)
     }
     return e
+  }
+
+  /**
+   * P1-1：串行化执行含 await 的引擎操作，防止并发状态突变。
+   * 用法：await manager.withLock(uid, e => e.ingest(text))
+   *      await manager.withLock(uid, e => e.reflect())
+   * 读操作（getContextPacket / listClaims / getState）无需加锁——它们不突变状态（P1-2 修复后）。
+   */
+  async withLock<T>(userId: string, fn: (e: HeadlessMuninn) => Promise<T>): Promise<T> {
+    const prev = this.locks.get(userId) ?? Promise.resolve()
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    this.locks.set(userId, prev.then(() => gate))
+    await prev
+    try {
+      const e = this.get(userId)
+      const result = await fn(e)
+      this.persist(userId)
+      return result
+    } finally {
+      release()
+    }
   }
 
   /** 有变更才写盘（tmp + rename 原子写） */

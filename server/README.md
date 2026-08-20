@@ -90,6 +90,7 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
    - `MUNINN_AUTH_TOKEN`（强烈建议）：所有 API / MCP 请求的 Bearer 令牌
    - `KIMI_API_KEY`（可选）：启用实时 LLM 判定，不配则规则判定兜底
    - `MUNINN_DATA_DIR`：默认镜像内已设为 `/data`
+   - `SF_API_KEY`（可选）：碰撞候选向量召回（硅基流动嵌入）；建议同时设 `MUNINN_EMBED_CACHE=/data/embed-cache.json` 让缓存随卷持久
 3. **挂卷**：Zeabur 服务 → Volumes → 挂载一个卷到 `/data`，
    否则容器重启后记忆数据会丢（当前持久化是 JSON 文件）。
 4. 绑定域名（Networking → Generate Domain），得到 `https://xxx.zeabur.app`。
@@ -247,7 +248,7 @@ npx tsx server/eval-locomo.ts --embed --k 15       # 混合检索：BM25 + 硅�
 及格线 = mem0 基线 × 90%（参照 arXiv:2604.04853 Table 11，LLM-judge，adversarial 单列）：
 single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 / 总分 ≥.602。
 
-**全量基线（2026-08-17，k=15，BM25+向量 RRF + HyDE，作答/判分 MiniMax M3 经硅基流动）**：
+**全量基线（2026-08-17，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 MiniMax M3 官方 API 直连）**：
 1986 题零批调用失败——single-hop **0.800** / temporal **0.726** / multi-hop **0.504** / open-domain 0.531 / adversarial 0.843（单列不计入）；
 **总分 0.640**，双口径过线（四类及格线宏平均 0.5551、文档总分口径 0.602），高于 mem0 参照宏平均 0.617。
 open-domain（0.531 vs 0.729）为已知短板，差在跨碎片推断，已立项为下一靶子。
@@ -279,7 +280,7 @@ mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径
 
 ## MVP 简化声明（后续迭代方向）
 
-- 碰撞预筛用字符重合度近似，LLM 候选按龙脉值 top-12 截断（新线索保底放行，债务①）；embedding 到位后替换 `core.ts` 里的 `charOverlap` 与截断（防线在 adjudication 层，向量只是预筛加速器）。
+- 碰撞 LLM 候选排序：向量召回（配 `SF_API_KEY` 即启用；嵌入经 `embed-node.ts` 磁盘缓存去重，未变化线索零 API 成本；缺 key 或调用失败自动回龙脉值排序）。top-12 截断与新线索保底放行不变（债务①）；无 LLM 时的规则兜底路径仍用字符重合度近似（`charOverlap`）——防线在 adjudication 层，预筛只是加速器。
 - 认知层反刍抽取与反证搜索（异源红队 + 强制裁决留痕 + 防教条化衰减）已实现（`/v1/reflect`）；用户自述反证走 `/v1/counter`。
 - 盲推导审计已实现（null model 基线 + 漂移信号 + 用户可见标记，`/v1/audit`）；漂移定位（历史版本二分重建）未实现。
 - 对照窗口已实现（风险分级 + 内生标记 + 危机中止阀 + 到期校验，`/v1/window`）；窗口指令依赖宿主遵守（架构边界）。

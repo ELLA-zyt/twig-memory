@@ -34,6 +34,11 @@
  *   MUNINN_AUDIT_INTERVAL_DAYS 可选，reflect 内自动盲推导审计的间隔天数（默认 7；0 关闭）
  *   MUNINN_AUDIT_SAMPLES  可选，盲推导抽样次数（默认 3，2-5 之间）
  *   MUNINN_AUTO_WINDOW    可选，=1 时 reflect 自动为最高置信的 low 风险论断开启对照窗口（默认关）
+ *   SF_API_KEY / SILICONFLOW_API_KEY  可选，硅基流动嵌入 key：配置后碰撞 LLM 候选排序改用向量召回
+ *   MUNINN_EMBED_CACHE   可选，嵌入磁盘缓存路径（默认 server/eval-data/embed-cache.json；云部署建议指到挂卷目录）
+ *   MUNINN_TZ           可选，时区（默认 Asia/Shanghai；影响碎片日期标签与天数计算）
+ *   MUNINN_CORS_ORIGIN  可选，CORS 允许源（默认 *；生产建议设为具体域名）
+ *   MUNINN_RATE_LIMIT   可选，每用户每分钟请求数上限（默认 0 = 不限制）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
@@ -42,11 +47,20 @@ import { EngineManager } from './manager'
 import { registerNodeTransport } from './llm-node'
 import { createMcpServer } from './mcp-server'
 import { chatTurn } from './host-loop'
+import { registerEmbedProvider } from './embed-node'
 
 const PORT = Number(process.env.PORT || 7300)
 const AUTH_TOKEN = process.env.MUNINN_AUTH_TOKEN || ''
+const CORS_ORIGIN = process.env.MUNINN_CORS_ORIGIN || '*'
+const RATE_LIMIT = Number(process.env.MUNINN_RATE_LIMIT || 0)
 const manager = new EngineManager()
 const llmReady = registerNodeTransport()
+const embedReady = registerEmbedProvider()
+
+// P1-11：启动时告警空 token（不阻止启动——本地 dev 可能故意不设）
+if (!AUTH_TOKEN && process.env.NODE_ENV === 'production') {
+  console.warn('[muninn] 警告：MUNINN_AUTH_TOKEN 未设置，生产环境下所有 API 将无认证')
+}
 
 const sseTransports = new Map<string, SSEServerTransport>()
 
@@ -55,11 +69,21 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
+/** P1-8：请求体大小上限（1MB），防止超大 body 耗尽内存 */
+const MAX_BODY_BYTES = 1024 * 1024
+
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
-  for await (const chunk of req) chunks.push(chunk as Buffer)
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length
+    if (size > MAX_BODY_BYTES) throw new Error('请求体过大（上限 1MB）')
+    chunks.push(chunk as Buffer)
+  }
   if (chunks.length === 0) return {}
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  const text = Buffer.concat(chunks).toString('utf8')
+  // P2-16：JSON 解析失败返回 400 而非 500
+  try { return JSON.parse(text) } catch { throw new Error('请求体不是合法 JSON') }
 }
 
 function authorized(req: IncomingMessage, url: URL): boolean {
@@ -69,8 +93,20 @@ function authorized(req: IncomingMessage, url: URL): boolean {
   return url.searchParams.get('token') === AUTH_TOKEN
 }
 
+/** P1-9：简单 per-user 速率限制（固定窗口，内存计数） */
+const rateBuckets = new Map<string, { count: number; resetAt: number }>()
+function checkRate(userId: string): boolean {
+  if (RATE_LIMIT <= 0) return true
+  const now = Date.now()
+  const r = rateBuckets.get(userId)
+  if (!r || now > r.resetAt) { rateBuckets.set(userId, { count: 1, resetAt: now + 60_000 }); return true }
+  if (r.count >= RATE_LIMIT) return false
+  r.count++
+  return true
+}
+
 const server = createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id')
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
@@ -79,7 +115,7 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      return send(res, 200, { ok: true, llm: llmReady ? 'live' : 'heuristic-only', auth: !!AUTH_TOKEN })
+      return send(res, 200, { ok: true, llm: llmReady ? 'live' : 'heuristic-only', embed: embedReady ? 'vector-recall' : 'dragonvein-only', auth: !!AUTH_TOKEN })
     }
 
     if (!authorized(req, url)) {
@@ -126,27 +162,31 @@ const server = createServer(async (req, res) => {
       const uid = String(body.userId ?? '')
       const text = String(body.text ?? '')
       if (!uid || !text) return send(res, 400, { error: 'userId 和 text 必填' })
-      const result = await manager.get(uid).ingest(text, {
+      // P1-8：输入长度上限
+      if (text.length > 4000) return send(res, 400, { error: 'text 过长（上限 4000 字符）' })
+      if (!checkRate(uid)) return send(res, 429, { error: '请求过于频繁' })
+      // P1-1：withLock 串行化
+      const result = await manager.withLock(uid, (e) => e.ingest(text, {
         title: body.title ? String(body.title) : undefined,
         tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
-      })
-      manager.persist(uid)
+      }))
       return send(res, 200, result)
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/contest') {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
-      const ok = manager.get(uid).contestClaim(String(body.claimId ?? ''), String(body.note ?? ''))
-      manager.persist(uid)
-      return send(res, ok ? 200 : 404, { ok })
+      const result = await manager.withLock(uid, (e) => {
+        const ok = e.contestClaim(String(body.claimId ?? ''), String(body.note ?? ''))
+        return Promise.resolve(ok)
+      })
+      return send(res, result ? 200 : 404, { ok: result })
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/counter') {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
-      const result = await manager.get(uid).counterCheck(String(body.claimId ?? ''), String(body.text ?? ''))
-      manager.persist(uid)
+      const result = await manager.withLock(uid, (e) => e.counterCheck(String(body.claimId ?? ''), String(body.text ?? '')))
       return send(res, result.ok ? 200 : 400, result)
     }
 
@@ -154,8 +194,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
       if (!uid) return send(res, 400, { error: 'userId 必填' })
-      const result = await manager.get(uid).reflect()
-      manager.persist(uid)
+      const result = await manager.withLock(uid, (e) => e.reflect())
       return send(res, 200, result)
     }
 
@@ -164,8 +203,7 @@ const server = createServer(async (req, res) => {
       const uid = String(body.userId ?? '')
       if (!uid) return send(res, 400, { error: 'userId 必填' })
       try {
-        const result = await manager.get(uid).auditDrift()
-        manager.persist(uid)
+        const result = await manager.withLock(uid, (e) => e.auditDrift())
         return send(res, 200, result)
       } catch (err) {
         return send(res, 503, { error: err instanceof Error ? err.message : String(err) })
@@ -177,8 +215,7 @@ const server = createServer(async (req, res) => {
       const uid = String(body.userId ?? '')
       if (!uid) return send(res, 400, { error: 'userId 必填' })
       const days = Number(body.days ?? 7) || 7
-      const result = await manager.get(uid).startWindow(String(body.claimId ?? ''), days)
-      manager.persist(uid)
+      const result = await manager.withLock(uid, (e) => e.startWindow(String(body.claimId ?? ''), days))
       return send(res, result.ok ? 200 : 400, result)
     }
 
@@ -186,9 +223,9 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
       if (!uid || !body.text) return send(res, 400, { error: 'userId 和 text 必填' })
-      const ok = manager.get(uid).noteIntervention(body.claimId ? String(body.claimId) : undefined, String(body.text))
+      manager.get(uid).noteIntervention(body.claimId ? String(body.claimId) : undefined, String(body.text))
       manager.persist(uid)
-      return send(res, ok ? 200 : 400, { ok })
+      return send(res, 200, { ok: true })
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/correct') {
@@ -205,6 +242,8 @@ const server = createServer(async (req, res) => {
       const uid = String(body.userId ?? '')
       const text = String(body.text ?? '').trim()
       if (!uid || !text) return send(res, 400, { error: 'userId 和 text 必填' })
+      if (text.length > 4000) return send(res, 400, { error: 'text 过长（上限 4000 字符）' })
+      if (!checkRate(uid)) return send(res, 429, { error: '请求过于频繁' })
       try {
         return send(res, 200, await chatTurn(manager, uid, text))
       } catch (err) {
@@ -212,10 +251,10 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // P1-2：读操作不加锁——getContextPacket 不再执行 tick()（无副作用）
     if (req.method === 'GET' && url.pathname === '/v1/context') {
       if (!userId) return send(res, 400, { error: 'userId 必填' })
       const packet = manager.get(userId).getContextPacket(userId)
-      manager.persist(userId)
       return send(res, 200, packet)
     }
 
@@ -231,13 +270,16 @@ const server = createServer(async (req, res) => {
 
     return send(res, 404, { error: 'not found' })
   } catch (err) {
-    if (!res.headersSent) send(res, 500, { error: err instanceof Error ? err.message : String(err) })
+    const msg = err instanceof Error ? err.message : String(err)
+    // P2-16：客户端错误（body 解析失败等）返回 400
+    if (msg.includes('JSON') || msg.includes('过大')) return send(res, 400, { error: msg })
+    if (!res.headersSent) send(res, 500, { error: msg })
     else res.end()
   }
 })
 
 server.listen(PORT, () => {
-  console.log(`[muninn] HTTP ready: http://localhost:${PORT} (llm: ${llmReady ? 'live' : 'heuristic-only'}, auth: ${AUTH_TOKEN ? 'on' : 'off'})`)
+  console.log(`[muninn] HTTP ready: http://localhost:${PORT} (llm: ${llmReady ? 'live' : 'heuristic-only'}, embed: ${embedReady ? 'vector-recall' : 'dragonvein-only'}, auth: ${AUTH_TOKEN ? 'on' : 'off'})`)
 })
 
 /* ---------- 可选：进程内定时反刍（MUNINN_AUTO_REFLECT=1 开启） ----------
@@ -249,7 +291,7 @@ if (process.env.MUNINN_AUTO_REFLECT === '1') {
   console.log(`[muninn] auto-reflect enabled: every ${hours}h (loaded users only)`)
   setInterval(() => {
     for (const uid of manager.loadedUserIds()) {
-      manager.get(uid).reflect().then(() => manager.persist(uid)).catch(() => { /* 单用户失败不影响其他 */ })
+      manager.withLock(uid, (e) => e.reflect()).catch(() => { /* 单用户失败不影响其他 */ })
     }
   }, intervalMs)
 }

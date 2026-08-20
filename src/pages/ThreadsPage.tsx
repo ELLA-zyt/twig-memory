@@ -2,15 +2,17 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { GitMerge, Split } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { STATUS_LABEL } from '../engine/engine'
 import type { Thread } from '../engine/types'
 import { useEngine } from '../state/EngineContext'
 import { CornerSprigs, PageHead, Seal, SectionTitle } from '../components/nouveau'
 
 const POOLS = [
-  { key: 'ACTIVE', name: 'ACTIVE · 实时碰撞', dot: 'bg-raven', foot: '碰撞策略：实时 100%', chip: 'nv-chip-solid' },
-  { key: 'DORMANT', name: 'DORMANT · 低频扫描', dot: 'bg-fog', foot: '绝不脱离碰撞——脱离等于死亡', chip: '' },
-  { key: 'SILENT', name: 'SILENT · 触发器待机', dot: 'bg-pine', foot: '三信号齐备才入池 · 接受一定虚警率', chip: '' },
+  { key: 'ACTIVE', name: 'ACTIVE · 实时碰撞', dot: 'bg-raven', foot: '碰撞策略：实时 100%' },
+  { key: 'DORMANT', name: 'DORMANT · 低频扫描', dot: 'bg-fog', foot: '绝不脱离碰撞——脱离等于死亡' },
+  { key: 'SILENT', name: 'SILENT · 触发器待机', dot: 'bg-pine', foot: '三信号齐备才入池 · 接受一定虚警率' },
 ] as const
 
 function ago(day: number) {
@@ -220,7 +222,7 @@ export default function ThreadsPage() {
 
       {/* ---------- 三池分列 ---------- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-        {POOLS.map(({ key, name, dot, foot, chip }) => {
+        {POOLS.map(({ key, name, dot, foot }) => {
           const list = threads.filter((t) => t.pool === key)
           return (
             <section key={key}>
@@ -228,7 +230,10 @@ export default function ThreadsPage() {
                 <span className={cn('w-2 h-2 rounded-full', dot)} />
                 <span className="font-display text-sm font-semibold">{name}</span>
                 <span className="flex-1" />
-                <span className={cn('nv-chip text-[10px] px-2 py-0.5', chip)}>{list.length}</span>
+                {/* shadcn Badge：标准 badge 样式，与 Seal 并存 */}
+                <Badge variant="outline" className="text-[10px] font-normal border-[hsl(var(--gold)/0.4)] text-foreground bg-transparent">
+                  {list.length}
+                </Badge>
               </div>
               <div className="space-y-2.5">
                 {list.length === 0 && <div className="text-[11px] text-fog text-center py-6 rounded-xl border border-dashed border-border">此池暂空</div>}
@@ -272,7 +277,8 @@ export default function ThreadsPage() {
                 ))}
               </div>
             )}
-            <div className="text-[10px] text-fog mt-3 pt-3 border-t border-[hsl(var(--gold)/0.25)] leading-relaxed">
+            <Separator className="my-3 bg-[hsl(var(--gold)/0.25)]" />
+            <div className="text-[10px] text-fog leading-relaxed">
               split：龙脉与情感权重复制而非对半分 · 分裂点前历史共享
             </div>
           </div>

@@ -11,7 +11,8 @@
  * merge / split 判定、SILENT 入池扫描。各环节独立降级——LLM 不可用时只推进 tick。
  *
  * MVP 简化（已在 README 声明）：
- *   - 碰撞预筛用字符重合度近似；embedding 到位后替换 core.ts 里的 charOverlap 与候选截断。
+ *   - 碰撞 LLM 候选排序支持向量召回（接入层经 setEmbedFn 注入 embedder；未注入/调用失败
+ *     自动回龙脉值排序）；规则兜底路径（heuristicAdjudicate / 沉默唤醒兜底）仍用字符重合近似。
  *   - 龙脉值按自然日衰减，在线索被命中时回升；反证自动搜索（异源生成）未做。
  */
 import {
@@ -21,12 +22,28 @@ import {
 } from '../src/engine/llm'
 import type { BlindDerivation, WindowVerdict } from '../src/engine/llm'
 import type { Claim, Fragment, Thread, VAD } from '../src/engine/types'
+import { estimateVAD } from '../src/engine/vad'
 
 /**
- * LLM 碰撞候选上限：线索量增长后 prompt 保持有界（按龙脉值 top-k 截断）。
- * embedding 预筛到位后，此截断替换为向量召回即可——假阳性防线在 LLM adjudication 层，不在向量层（§4.4）。
+ * LLM 碰撞候选上限：线索量增长后 prompt 保持有界（top-k 截断）。
+ * 排序优先向量召回（setEmbedFn 注入），缺省或失败时回龙脉值排序——
+ * 假阳性防线在 LLM adjudication 层，预筛只做「让 LLM 先看哪 k 条」（§4.4）。
  */
 const MAX_LLM_CANDIDATES = 12
+
+/** 向量召回注入点（与 src/engine/llm 的 setChatTransport 同构）：服务端接入层注入真实 embedder；
+ *  测试与浏览器 demo 不注入，保持确定性的龙脉排序路径 */
+export type EmbedFn = (texts: string[]) => Promise<number[][]>
+let embedFn: EmbedFn | null = null
+export function setEmbedFn(fn: EmbedFn | null): void { embedFn = fn }
+
+/** 余弦相似度（不假定入参已单位化，防御式计算） */
+function cosine(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  return dot / ((Math.sqrt(na) * Math.sqrt(nb)) || 1)
+}
 
 /** 漂移判定的两个阈值（§5.2）：超基线余量 / 标记给用户的绝对幅度 */
 const DRIFT_MARGIN = 0.15
@@ -41,20 +58,23 @@ const VETO_SEAL_COUNT = 2
  * 碎片视图（判定层统一入口）：本人修正标注（债务⑥）拼进正文——判定看得到修正后的事实，
  * 原文永不改动。所有 LLM 判定函数的碎片入参都从这里出。
  */
-export function fragView(f: Fragment): { id: string; date: string; title: string; body: string; arousal: number } {
+export function fragView(f: Fragment): { id: string; date: string; title: string; body: string; arousal: number; correctionAt?: string } {
   return {
     id: f.id,
     date: f.dateLabel,
     title: f.title,
     body: f.correction ? `${f.body}〔本人修正：${f.correction.note}〕` : f.body,
     arousal: f.vad.arousal,
+    correctionAt: f.correction?.at,
   }
 }
 
-/** 高风险词表（§5.3 设计债务⑤）：命中即 high，不经 LLM——伦理防线 fail-safe */
-const HIGH_RISK_LEXICON = /(医院|复查|体检|手术|吃药|药物|失眠|抑郁|焦虑|自杀|自残|轻生|想死|伤害|危机|安全|债务|贷款|失业|晕倒|急诊)/
-/** 危机信号词表（§7.1）：窗口期内命中 → 立即中止全部对照，恢复正常干预 */
-const CRISIS_LEXICON = /(自杀|自残|轻生|不想活|想死|伤害自己|活不下去)/
+/** 高风险词表（§5.3 设计债务⑤）：命中即 high，不经 LLM——伦理防线 fail-safe。
+ *  P1-6 修复：移除过宽的「安全/伤害/焦虑/危机」单字匹配，改为复合词组降低假阳性 */
+const HIGH_RISK_LEXICON = /(医院|复查|体检|手术|吃药|药物|失眠|抑郁|自杀|自残|轻生|想死|伤害自己|伤害他人|人身安全|安全隐患|债务|贷款|失业|晕倒|急诊)/
+/** 危机信号词表（§7.1）：窗口期内命中 → 立即中止全部对照，恢复正常干预。
+ *  P1-5 修复：不想活(?!动) 避免匹配「不想活动」，但不影响「不想活的念头」「不想活了」 */
+const CRISIS_LEXICON = /(自杀|自残|轻生|不想活(?!动)|想死|伤害自己|活不下去)/
 
 export interface MuninnState {
   fragments: Fragment[]
@@ -136,26 +156,23 @@ export interface ReflectResult {
   windowsInconclusive: number
   /** contested 再提（§5.4 债务⑦）：本轮备好邀请的论断数 */
   rementionsPrepared: number
+  /** 反证搜索被 skip 时，本轮新建论断尚未过红队（P2-10） */
+  claimsUnchecked: number
   /** 本轮附带的盲推导审计结果（按 MUNINN_AUDIT_INTERVAL_DAYS 定期触发） */
   driftAudit?: AuditRecord
   skipped: string[]
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+/** P1-4 修复：时区感知日期。云部署默认 UTC，中国用户日期会差一天。
+ *  MUNINN_TZ 可覆盖（默认 Asia/Shanghai）；'sv-SE' locale 产出 ISO 格式 yyyy-MM-dd */
+const TZ = process.env.MUNINN_TZ || 'Asia/Shanghai'
+const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: TZ })
 
 function daysBetween(from: string, to: string): number {
   const a = new Date(from).getTime()
   const b = new Date(to).getTime()
   if (Number.isNaN(a) || Number.isNaN(b)) return 0
   return Math.max(0, Math.round((b - a) / 86400000))
-}
-
-/** 粗粒度 VAD 估计（与 demo 同源的规则法；后续可换 LLM 打分） */
-function estimateVAD(text: string): VAD {
-  const neg = /(累|烦|卡住|坏了|失眠|焦虑|崩溃|担心|害怕|吵架|分手|辞职|丢)/.test(text)
-  const pos = /(终于|开心|成了|到手|解决|突破|签|喜欢|顺利|搞定|完成)/.test(text)
-  const arousal = Math.min(0.9, 0.35 + (/[！!？?]/.test(text) ? 0.25 : 0) + (neg || pos ? 0.2 : 0))
-  return { valence: pos ? 0.6 : neg ? -0.5 : 0, arousal, dominance: 0.5 }
 }
 
 /** 字符级重合度（embedding 就位前的预筛近似） */
@@ -205,14 +222,25 @@ export class HeadlessMuninn {
     const elapsed = daysBetween(this.state.lastTickDate, today)
     if (elapsed <= 0) return 0
 
+    // 碎片年龄更新
     for (const f of this.state.fragments) {
       f.day = daysBetween(f.dateLabel, today)
+    }
+    // P0-1 修复：ThreadEvent.day 同步老化——从关联 Fragment.day 派生，而非硬编码 0。
+    // 修复前 promoteSilent 的 lastDay/firstDay 永远为 0，SILENT 入池永不触发；
+    // merge/split 的 LLM 输入也永远显示「0天前」，无法判断时间跨度。
+    const fragDayById = new Map(this.state.fragments.map((f) => [f.id, f.day]))
+    for (const t of this.state.threads) {
+      for (const e of t.history) {
+        if (e.fragmentId) e.day = fragDayById.get(e.fragmentId) ?? e.day
+      }
     }
     for (const t of this.state.threads) {
       if (t.status !== 'unresolved') continue
       // SILENT 池不因沉默降权（§4.5）：回避型高权重线索跳过衰减与降池
       if (t.pool === 'SILENT') continue
-      t.dragonVein = Math.max(0, t.dragonVein - 0.03 * elapsed)
+      // P3-3 优化：衰减率 0.03→0.015，长程系统 10 天无推进即 abandoned 过激进
+      t.dragonVein = Math.max(0, t.dragonVein - 0.015 * elapsed)
       if (t.pool === 'ACTIVE' && t.dragonVein < 0.15) t.pool = 'DORMANT'
       else if (t.pool === 'DORMANT' && t.dragonVein <= 0) {
         t.status = 'abandoned'
@@ -288,7 +316,12 @@ export class HeadlessMuninn {
     t.history.push({ day: 0, fragmentId, note })
     t.dragonVein = Math.min(1, t.dragonVein + 0.3)
     // SILENT 被触发器唤醒后重新参与日常召回（§4.5）
-    if (t.pool === 'DORMANT' || t.pool === 'SILENT') t.pool = 'ACTIVE'
+    // P0-3 修复：唤醒时清空 silentSignals，否则 promoteSilent 的 `if (t.silentSignals) continue`
+    // 会永久跳过该线索——被唤醒过的 SILENT 线索即使再次沉默数月也永不重新入池
+    if (t.pool === 'DORMANT' || t.pool === 'SILENT') {
+      if (t.pool === 'SILENT') t.silentSignals = undefined
+      t.pool = 'ACTIVE'
+    }
     this.dirty = true
   }
 
@@ -335,9 +368,9 @@ export class HeadlessMuninn {
     const pool = this.state.threads
       .filter((t) => t.status === 'unresolved' && (t.pool === 'ACTIVE' || t.pool === 'DORMANT'))
       .sort((a, b) => b.dragonVein - a.dragonVein)
-    // 债务①收尾：截断只做相对排序（龙脉管「看哪里」，不设绝对门槛）；新登记线索（历史仅 1 条）
+    // 债务①收尾：截断只做相对排序（不设绝对门槛）；新登记线索（历史仅 1 条）
     // 保底进候选——新边的形成发生在碰撞里，不能被排序截断锁在候选集外（冷启动死循环的截断变体）
-    const top = pool.slice(0, MAX_LLM_CANDIDATES)
+    const top = await this.rankCandidates(pool, text)
     const newcomers = pool.filter((t) => t.history.length <= 1 && !top.includes(t)).slice(0, 3)
     const candidates = [...top, ...newcomers].map((t) => ({ id: t.id, label: t.label, openQuestion: t.openQuestion }))
 
@@ -349,6 +382,28 @@ export class HeadlessMuninn {
       // 无 key / 网络失败 / 解析失败 → 回退规则判定
     }
     return await this.heuristicAdjudicate(f, text, vad)
+  }
+
+  /**
+   * LLM 候选排序：向量召回优先（语义邻近），未注入 embedder / 池未超上限 / 调用失败时
+   * 回龙脉排序。只做相对排序、不设相似度门槛（债务①）——召回错了的代价是 LLM 多看几条
+   * 无关线索，防线在 adjudication 层；线索文本经磁盘缓存去重，未变化的线索零 API 成本。
+   */
+  private async rankCandidates(pool: Thread[], text: string): Promise<Thread[]> {
+    if (!embedFn || pool.length <= MAX_LLM_CANDIDATES) return pool.slice(0, MAX_LLM_CANDIDATES)
+    try {
+      const hay = (t: Thread) => [t.label, t.openQuestion, ...t.synthetic.abstractFloor, ...t.synthetic.concreteGuesses].join(' ')
+      const vecs = await embedFn([text, ...pool.map(hay)])
+      if (!Array.isArray(vecs) || vecs.length !== pool.length + 1) throw new Error('embed count mismatch')
+      const q = vecs[0]
+      return pool
+        .map((t, i) => ({ t, s: cosine(q, vecs[i + 1]) }))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, MAX_LLM_CANDIDATES)
+        .map((x) => x.t)
+    } catch {
+      return pool.slice(0, MAX_LLM_CANDIDATES)
+    }
   }
 
   /** 主碰撞无命中时扫沉默池（§4.5 触发器唤醒）：LLM 判定优先，字符重合兜底 */
@@ -377,6 +432,27 @@ export class HeadlessMuninn {
     }
   }
 
+  /** P0-4 修复：热路径扑空时扫归档层（§4.7 abandoned「廉价可重激活」）。
+   *  设计承诺「不进死档，热路径扑空才扫归档层」——修复前无任何代码路径扫描 ARCHIVE。
+   *  廉价 = 不调 LLM，字符重合预筛命中即回 DORMANT，下次 ingest 自然进 LLM 候选 */
+  private archiveWakeCheck(text: string, f: Fragment): { threadId: string; note: string } | null {
+    const abandoned = this.state.threads.filter((t) => t.status === 'abandoned')
+    if (abandoned.length === 0) return null
+    for (const t of abandoned) {
+      const hay = [t.label, t.openQuestion, ...t.synthetic.abstractFloor, ...t.synthetic.concreteGuesses].join(' ')
+      if (charOverlap(text, hay) >= 0.4) {
+        t.status = 'unresolved'
+        t.pool = 'DORMANT'
+        t.dragonVein = 0.1
+        t.closureReason = undefined
+        t.history.push({ day: 0, fragmentId: f.id, note: '归档重激活：热路径扑空后字符重合 ≥0.4' })
+        this.dirty = true
+        return { threadId: t.id, note: `归档线索「${t.label}」被重激活（廉价可重激活 §4.7）` }
+      }
+    }
+    return null
+  }
+
   private async applyVerdict(
     verdict: NonNullable<Awaited<ReturnType<typeof adjudicateFree>>>,
     f: Fragment,
@@ -400,8 +476,15 @@ export class HeadlessMuninn {
         this.resolveThread(tid, f.id, `回收：${text.slice(0, 16)}`, verdict.reply)
         return { ...base, action: 'resolved', threadId: tid }
       }
-      if (verdict.verdict === '推进' || verdict.verdict === '反转') {
-        this.touchThread(tid, f.id, `${verdict.verdict}：${text.slice(0, 16)}`)
+      if (verdict.verdict === '推进') {
+        this.touchThread(tid, f.id, `推进：${text.slice(0, 16)}`)
+        return { ...base, action: 'progressed', threadId: tid }
+      }
+      if (verdict.verdict === '反转') {
+        // P2-5 修复：反转 ≠ 推进——旧轨迹被否定，关联论断应进入优先重审。
+        // touchThread 记录事件 + 降低关联 active 论断置信（下轮 reflect 反证搜索会优先审计）
+        this.touchThread(tid, f.id, `反转：${text.slice(0, 16)}`)
+        this.markReversal(tid)
         return { ...base, action: 'progressed', threadId: tid }
       }
       if (verdict.verdict === '弱信号') {
@@ -416,7 +499,27 @@ export class HeadlessMuninn {
     // 主碰撞无命中 → 扫沉默池（触发器唤醒；SILENT 不参与日常碰撞，只在无命中时探测）
     const silentWake = await this.silentWakeCheck(text, f)
     if (silentWake) return { ...base, action: 'noted', silentWake }
+    // P0-4：热路径扑空 → 扫归档层（abandoned 廉价可重激活 §4.7）
+    const revived = this.archiveWakeCheck(text, f)
+    if (revived) return { ...base, action: 'noted', silentWake: revived }
     return { ...base, action: 'noted' }
+  }
+
+  /** P2-5：反转标记——降低关联 active 论断的置信，使其在下轮 reflect 反证搜索中优先受审 */
+  private markReversal(threadId: string): void {
+    const t = this.state.threads.find((x) => x.id === threadId)
+    if (!t) return
+    const fragIds = new Set(t.history.map((h) => h.fragmentId))
+    for (const c of this.state.claims) {
+      if (c.status === 'active' && c.evidenceIds.some((id) => fragIds.has(id))) {
+        const conviction = Math.max(0.05, Math.round((c.conviction - 0.05) * 100) / 100)
+        if (conviction < c.conviction) {
+          c.versions.push({ at: todayStr(), text: c.text, conviction, reason: `反转标记：关联线索「${t.label}」轨迹被否定，优先重审` })
+          c.conviction = conviction
+          this.dirty = true
+        }
+      }
+    }
   }
 
   /** 规则兜底：字符重合近似碰撞 + 高唤醒非终态登记新线索（宽进严升） */
@@ -444,6 +547,9 @@ export class HeadlessMuninn {
     }
     const silentWake = await this.silentWakeCheck(text, f)
     if (silentWake) return { ...base, action: 'noted', silentWake, reply: '已记入碎片层。' }
+    // P0-4：热路径扑空 → 扫归档层
+    const revived = this.archiveWakeCheck(text, f)
+    if (revived) return { ...base, action: 'noted', silentWake: revived, reply: '已记入碎片层。' }
     return { ...base, action: 'noted', reply: '已记入碎片层。' }
   }
 
@@ -469,6 +575,7 @@ export class HeadlessMuninn {
           reason: '矛盾响应：用户自述反证 → 加限定 + 降置信',
         })
         claim.text = verdict.revised
+        claim.riskLevel = undefined
         claim.conviction = verdict.conviction
         this.dirty = true
         return { ok: true, detail: verdict.reply }
@@ -526,6 +633,7 @@ export class HeadlessMuninn {
       threadsMerged: 0, threadsSplit: 0, silentPromoted: this.tick(), skipped: [],
       windowsConfirmed: 0, windowsFailed: 0, windowsInconclusive: 0,
       rementionsPrepared: 0,
+      claimsUnchecked: 0,
     }
 
     // —— 认识层抽取（§5.1 改写式：证据锚定 + 边界条件 + 去定性化）——
@@ -567,10 +675,13 @@ export class HeadlessMuninn {
           } else if (op.op === 'rewrite' && op.claimId && textOk && evidence.length >= 1) {
             const claim = this.state.claims.find((c) => c.id === op.claimId && c.status === 'active')
             if (claim) {
+              const textChanged = claim.text !== op.text
               claim.text = op.text
               claim.conviction = conviction
               claim.evidenceIds = [...new Set([...claim.evidenceIds, ...evidence])]
               if (typeof op.boundary === 'string' && op.boundary) claim.boundary = op.boundary
+              // P1-7 修复：论断文本改写后风险分级失效——下次 startWindow 重新分级
+              if (textChanged) claim.riskLevel = undefined
               claim.versions.push({ at: todayStr(), text: op.text, conviction, reason: op.reason ? `反刍改写：${op.reason}` : '反刍改写' })
               out.claimsRewritten++
             }
@@ -631,7 +742,10 @@ export class HeadlessMuninn {
             conviction,
             reason: `反证裁决：红队命中 ×${hits.length}，${revisedChanged ? '论断加限定重写' : '反证被解释掉，置信小幅衰减'}`,
           })
-          if (revisedChanged) claim.text = verdict.revised
+          if (revisedChanged) {
+            claim.text = verdict.revised
+            claim.riskLevel = undefined
+          }
           claim.conviction = conviction
           out.counterRevised++
         }
@@ -640,6 +754,8 @@ export class HeadlessMuninn {
     } catch {
       out.skipped.push('counter: LLM 不可用')
     }
+    // P2-10：反证搜索被 skip 时，标记本轮新建论断尚未过红队
+    out.claimsUnchecked = out.claimsCreated > 0 && out.skipped.some((s) => s.startsWith('counter:')) ? out.claimsCreated : 0
 
     // —— contested 再提门槛（§5.4 · 设计债务⑦ 量化与防纠缠）——
     // 独立新证据 ≥3（高于创建门槛的 2）+ 否决后冷却 14 天 → 生成邀请式再提议草；
@@ -746,7 +862,7 @@ export class HeadlessMuninn {
         const ids1 = (c1.fragmentIds ?? []).filter((id) => validIds.has(id))
         // 分配不完整或两边重叠 → 无效分裂，跳过（保守面）
         if (ids0.length === 0 || ids1.length === 0 || ids0.some((id) => ids1.includes(id))) continue
-        this.splitThread(t, [
+        await this.splitThread(t, [
           { label: c0.label || `${t.label}·甲`, openQuestion: c0.openQuestion || t.openQuestion, fragmentIds: ids0 },
           { label: c1.label || `${t.label}·乙`, openQuestion: c1.openQuestion || t.openQuestion, fragmentIds: ids1 },
         ], verdict.reason ?? '回收条件不再共享，分化为平行分支')
@@ -897,7 +1013,10 @@ export class HeadlessMuninn {
           at: todayStr(), text: revisedChanged ? verdict.revised : claim.text, conviction,
           reason: `对照窗口反证 ×${hits.length}：${revisedChanged ? '论断加限定重写' : '反证被解释掉，置信小幅衰减'}`,
         })
-        if (revisedChanged) claim.text = verdict.revised
+        if (revisedChanged) {
+          claim.text = verdict.revised
+          claim.riskLevel = undefined
+        }
         claim.conviction = conviction
         claim.window = { ...w, status: 'failed', closedAt: new Date().toISOString(), note: `${cleanInfo}；反证 ×${hits.length}` }
         out.windowsFailed++
@@ -929,10 +1048,13 @@ export class HeadlessMuninn {
     if (runs.length < 2) throw new Error('盲推导样本不足（<2）')
 
     // null model：盲推导两两分歧 → 自然方差上界（取 max，保守面防虚警）
+    // P2-3 修复：全配对 i<j，而非只配 runs[0]——避免 B、C 互相分歧大但都接近 A 时基线被低估
     const pairDivs: number[] = []
-    for (let i = 1; i < runs.length; i++) {
-      const jd = await judgeDivergence(runs[0].claims, runs[i].claims)
-      if (jd) pairDivs.push(jd.divergence)
+    for (let i = 0; i < runs.length; i++) {
+      for (let j = i + 1; j < runs.length; j++) {
+        const jd = await judgeDivergence(runs[i].claims, runs[j].claims)
+        if (jd) pairDivs.push(jd.divergence)
+      }
     }
     if (pairDivs.length === 0) throw new Error('分歧评估样本不足')
     const baseline = Math.max(...pairDivs)
@@ -1031,8 +1153,9 @@ export class HeadlessMuninn {
   /**
    * split 规则（§4.8）：分裂点前历史共享（按 LLM 分配的 fragmentIds 划分）；
    * 龙脉值与情感权重复制而非对半分；父线索 → superseded，lineage 指向两个子线索。
+   * P2-2 修复：子线索合成句重生成（设计 §4.8「split 后合成句整套重生成」，与 merge 同规）。
    */
-  private splitThread(parent: Thread, children: { label: string; openQuestion: string; fragmentIds: string[] }[], reason: string): void {
+  private async splitThread(parent: Thread, children: { label: string; openQuestion: string; fragmentIds: string[] }[], reason: string): Promise<void> {
     for (const ch of children) {
       const id = `t${this.state.threadSeq++}`
       const history = parent.history.filter((h) => ch.fragmentIds.includes(h.fragmentId))
@@ -1044,7 +1167,7 @@ export class HeadlessMuninn {
           abstractFloor: [...new Set([...parent.synthetic.abstractFloor, `一个悬置的状态迎来结局：${ch.openQuestion}`])].slice(0, 4),
           concreteGuesses: [...parent.synthetic.concreteGuesses],
         },
-        dragonVein: parent.dragonVein, // 复制而非对半分：分叉时两条都还是完整的龙脉
+        dragonVein: parent.dragonVein,
         emotionalWeight: parent.emotionalWeight,
         history: [...history, {
           day: 0,
@@ -1058,6 +1181,18 @@ export class HeadlessMuninn {
       }
       parent.lineage.childIds.push(id)
       this.state.threads.unshift(c)
+      // P2-2：子线索合成句重生成——分化后的回收条件不同，旧猜测不再适用
+      try {
+        const regen = await regenConcreteGuesses(
+          { label: c.label, openQuestion: c.openQuestion, abstractFloor: c.synthetic.abstractFloor, existing: parent.synthetic.concreteGuesses },
+          history.map((h) => h.note),
+        )
+        if (regen?.concreteGuesses.length) {
+          c.synthetic.concreteGuesses = [...new Set([...parent.synthetic.concreteGuesses, ...regen.concreteGuesses])].slice(0, 6)
+        }
+      } catch {
+        // LLM 不可用时保留父线索的 concreteGuesses（当前行为）
+      }
     }
     parent.status = 'superseded'
     parent.pool = 'ARCHIVE'
@@ -1067,8 +1202,9 @@ export class HeadlessMuninn {
 
   /* ---------- 检索：叙事上下文包 ---------- */
 
+  // P1-2 修复：getContextPacket 是读操作，不再执行 tick()——
+  // 高频读取不应触发龙脉衰减/降池/SILENT 入池；tick 只在写操作（ingest/reflect/counterCheck/startWindow）中执行
   getContextPacket(userId: string): ContextPacket {
-    this.tick()
     const today = todayStr()
 
     const threads = this.state.threads
@@ -1110,7 +1246,12 @@ export class HeadlessMuninn {
       : undefined
 
     // 再提邀请（§5.4 债务⑦）：达门槛的 contested 观察，以邀请式措辞交宿主在合适时机提出
-    const rementions = this.state.claims.filter((c) => c.status === 'contested' && c.rementionInvitation)
+    // P2-4 修复：邀请 30 天后过期，不再注入上下文（防纠缠的反面——用户长期不回应就该停止提示）
+    const rementions = this.state.claims.filter((c) => {
+      if (c.status !== 'contested' || !c.rementionInvitation) return false
+      const age = daysBetween(c.rementionInvitation.at.slice(0, 10), today)
+      return age <= 30
+    })
     const rementionNote = rementions.length > 0
       ? `可再提的观察（曾被本人否决，现已积累 ${rementions.map((c) => c.rementionInvitation!.newEvidenceIds.length).join('/')} 条独立新证据，达到再提门槛）：${rementions.map((c) => c.rementionInvitation!.text).join('；')}——请在容得下反驳的对话时机以邀请式措辞自然提出；若再次被否决，该观察将永久封存（防纠缠）。`
       : undefined

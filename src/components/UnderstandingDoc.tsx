@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTween } from '@/hooks/useTween'
+import { Progress } from '@/components/ui/progress'
 import type { Claim, Fragment } from '../engine/types'
 import { Seal } from './bits'
 
@@ -8,14 +9,14 @@ function ConvictionGauge({ value, dropped }: { value: number; dropped?: boolean 
   const v = useTween(value, 1400)
   return (
     <div className="flex items-center gap-2">
-      <div className="nv-meter flex-1">
-        <div
-          className={cn('transition-colors', dropped && '!bg-none')}
-          style={dropped
-            ? { width: `${v * 100}%`, background: 'hsl(var(--cinnabar))' }
-            : { width: `${v * 100}%`, background: 'linear-gradient(90deg, hsl(var(--gold) / 0.75), hsl(var(--gold)))' }}
-        />
-      </div>
+      {/* shadcn Progress：ARIA role + 动画；用主题变量覆盖默认颜色 */}
+      <Progress
+        value={v * 100}
+        className={cn(
+          'flex-1 h-1.5',
+          dropped ? '[&>div]:bg-[hsl(var(--cinnabar))]' : '[&>div]:bg-gradient-to-r [&>div]:from-[hsl(var(--gold)/0.75)] [&>div]:to-[hsl(var(--gold))]',
+        )}
+      />
       <span className={cn('font-mono text-sm tabular-nums', dropped ? 'text-cinnabar' : 'text-gold')}>
         {v.toFixed(2)}
       </span>

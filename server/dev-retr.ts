@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildFragments, buildRetriever, expandQuery } from './eval-locomo'
+import { buildFragments, buildRetriever, expandQueryBatch } from './eval-locomo'
 import { registerNodeTransport } from './llm-node'
 
 registerNodeTransport()
@@ -15,13 +15,18 @@ const byId = new Map(frags.map((f) => [f.id, f]))
 const qas = conv.qa.filter((q) => q.category === 4 && (q.evidence ?? []).some((e) => byId.has(e)))
 
 let plain = 0, hyde = 0, n = 0
-for (const q of qas) {
-  const snippet = await expandQuery(q.question).catch(() => '')
-  const idsPlain = new Set(retrieve(q.question, 10).map((f) => f.id))
-  const idsHyde = new Set(retrieve(`${q.question} ${snippet}`, 10).map((f) => f.id))
-  if ((q.evidence ?? []).some((e) => idsPlain.has(e))) plain++
-  if ((q.evidence ?? []).some((e) => idsHyde.has(e))) hyde++
-  n++
+for (let i = 0; i < qas.length; i += 10) {
+  const chunk = qas.slice(i, i + 10)
+  const snippets = await expandQueryBatch(chunk.map((q) => q.question)).catch(() => chunk.map(() => ''))
+  for (let j = 0; j < chunk.length; j++) {
+    const q = chunk[j]
+    const snippet = snippets[j] ?? ''
+    const idsPlain = new Set(retrieve(q.question, 10).map((f) => f.id))
+    const idsHyde = new Set(retrieve(`${q.question} ${snippet}`, 10).map((f) => f.id))
+    if ((q.evidence ?? []).some((e) => idsPlain.has(e))) plain++
+    if ((q.evidence ?? []).some((e) => idsHyde.has(e))) hyde++
+    n++
+  }
   await new Promise((r) => setTimeout(r, 800))
 }
 console.log(`conv-26 single-hop ${n} 题，证据命中 top-10：原问题 ${plain}/${n}，HyDE ${hyde}/${n}`)

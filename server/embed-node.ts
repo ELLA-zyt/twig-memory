@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadEnvLocal } from './llm-node'
+import { setEmbedFn } from './core'
 
 const TIMEOUT_MS = 60000
 const RETRY_BASE_MS = 5000
@@ -17,7 +18,8 @@ const MAX_RETRIES = 4
 const BATCH_SIZE = 64
 
 const here = dirname(fileURLToPath(import.meta.url))
-const CACHE_FILE = join(here, 'eval-data', 'embed-cache.json')
+/** 缓存路径惰性解析（MUNINN_EMBED_CACHE 可覆盖；须在 loadEnvLocal 之后读取，故不作为模块级常量） */
+const cacheFile = (): string => process.env.MUNINN_EMBED_CACHE || join(here, 'eval-data', 'embed-cache.json')
 
 let cache: Record<string, number[]> | null = null
 let cacheDirty = false
@@ -25,7 +27,7 @@ let cacheDirty = false
 function cacheLoad(): Record<string, number[]> {
   if (cache) return cache
   try {
-    cache = existsSync(CACHE_FILE) ? (JSON.parse(readFileSync(CACHE_FILE, 'utf8')) as Record<string, number[]>) : {}
+    cache = existsSync(cacheFile()) ? (JSON.parse(readFileSync(cacheFile(), 'utf8')) as Record<string, number[]>) : {}
   } catch {
     cache = {}
   }
@@ -34,8 +36,8 @@ function cacheLoad(): Record<string, number[]> {
 
 function cacheSave(): void {
   if (!cacheDirty || !cache) return
-  mkdirSync(dirname(CACHE_FILE), { recursive: true })
-  writeFileSync(CACHE_FILE, JSON.stringify(cache), 'utf8')
+  mkdirSync(dirname(cacheFile()), { recursive: true })
+  writeFileSync(cacheFile(), JSON.stringify(cache), 'utf8')
   cacheDirty = false
 }
 
@@ -46,6 +48,13 @@ const cacheKey = (model: string, text: string): string =>
 export function embeddingsAvailable(): boolean {
   loadEnvLocal()
   return !!(process.env.SF_API_KEY || process.env.SILICONFLOW_API_KEY)
+}
+
+/** 把向量召回注入引擎核心（core.ts 的碰撞候选排序）。无 SF key 返回 false，引擎保持龙脉排序 */
+export function registerEmbedProvider(): boolean {
+  if (!embeddingsAvailable()) return false
+  setEmbedFn(embedTexts)
+  return true
 }
 
 const normalize = (v: number[]): number[] => {

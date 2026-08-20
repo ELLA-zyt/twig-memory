@@ -6,6 +6,7 @@
  */
 import { SEED_CLAIMS, SEED_FRAGMENTS, SEED_THREADS, TODAY_LABEL } from './data'
 import { adjudicateClosure, adjudicateCounter, adjudicateFree } from './llm'
+import { estimateVAD } from './vad'
 import type {
   ChatMsg, Claim, DemoKey, Fragment, LogAccent, LogEntry, LogKind, Thread, VAD,
 } from './types'
@@ -353,11 +354,8 @@ export class MuninnEngine {
     this.say('user', text)
     await sleep(450)
 
-    // 朴素 VAD 估计
-    const neg = /(累|烦|卡|丢|坏|怕|愁|失眠|焦虑|鸽|崩)/.test(text)
-    const pos = /(终于|开心|成了|到手|解决|突破|签|喜欢|顺利)/.test(text)
-    const arousal = Math.min(0.9, 0.35 + (text.includes('！') || text.includes('!') ? 0.25 : 0) + (neg || pos ? 0.2 : 0))
-    const vad: VAD = { valence: pos ? 0.6 : neg ? -0.5 : 0, arousal, dominance: 0.5 }
+    // P2-8：统一使用共享 VAD 估计（src/engine/vad.ts）
+    const vad: VAD = estimateVAD(text)
 
     // SILENT 触发器（§4.5）：规则直连，不依赖 LLM 时延
     if (/(父亲|爸爸|爸|医院|复查|体检|家里)/.test(text)) {

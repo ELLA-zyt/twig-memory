@@ -11,10 +11,12 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { EngineManager } from './manager'
 import { registerNodeTransport } from './llm-node'
+import { registerEmbedProvider } from './embed-node'
 import { createMcpServer } from './mcp-server'
 
 const manager = new EngineManager()
 registerNodeTransport()
+registerEmbedProvider()
 
 const server = createMcpServer(manager)
 await server.connect(new StdioServerTransport())

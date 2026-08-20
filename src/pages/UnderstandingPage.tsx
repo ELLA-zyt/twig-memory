@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router'
 import { Anchor, Eye, PenLine, RotateCcw, ScanSearch, ShieldCheck } from 'lucide-react'
 import { useEngine } from '../state/EngineContext'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CornerSprigs, HaloIcon, PageHead, Seal, SectionTitle } from '../components/nouveau'
 
 const COUNTER_STEPS = [
@@ -77,16 +78,27 @@ export default function UnderstandingPage() {
                     <div className="text-[13px] text-foreground/90 leading-relaxed">{c.text}</div>
                     <div className="flex items-center gap-3 mt-1.5">
                       <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-                        {c.evidenceIds.map((id) => (
-                          <button
-                            key={id}
-                            onClick={() => nav(`/fragments?hl=${id}`)}
-                            title={`定位碎片：${fragTitle(id)}`}
-                            className="text-[9px] font-mono border border-[hsl(var(--raven)/0.4)] text-raven rounded-full px-2 py-px hover:bg-[hsl(var(--raven)/0.08)] transition-colors"
-                          >
-                            {id.replace('f', 'EP-')}
-                          </button>
-                        ))}
+                        {c.evidenceIds.map((id) => {
+                          const ev = fragments.find((f) => f.id === id)
+                          return (
+                            <Popover key={id}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  onClick={() => nav(`/fragments?hl=${id}`)}
+                                  className="text-[9px] font-mono border border-[hsl(var(--raven)/0.4)] text-raven rounded-full px-2 py-px hover:bg-[hsl(var(--raven)/0.08)] transition-colors"
+                                >
+                                  {id.replace('f', 'EP-')}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" align="start" className="w-64 p-3 border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--card))] text-foreground shadow-md">
+                                <div className="text-[10px] text-fog mb-1">碎片 · {fragTitle(id)}</div>
+                                <div className="text-xs leading-relaxed line-clamp-3 font-display">
+                                  {ev?.body ?? '暂无摘要'}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )
+                        })}
                       </div>
                       <div className="flex items-center gap-2 shrink-0 w-40">
                         <span className="text-[8px] tracking-[0.2em] text-fog">CONVICTION</span>

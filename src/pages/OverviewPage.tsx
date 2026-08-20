@@ -2,6 +2,8 @@ import { ArrowRight, BookOpen, Flame, GitBranch, Layers, Moon, Puzzle, RefreshCw
 import { useEngine } from '../state/EngineContext'
 import { CornerSprigs, HaloIcon, PageHead, Seal, SectionTitle, VineDivider } from '../components/nouveau'
 import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 
 /* ---------------- 统计卡 ---------------- */
 function StatCard({ icon, label, en, value, sub, tone = 'green', flash }: {
@@ -79,7 +81,8 @@ export default function OverviewPage() {
           <div className="text-[11px] text-fog mt-2.5 leading-relaxed">
             今晚 02:00 低频扫描 + 盲推导审计
           </div>
-          <div className="mt-3 pt-3 border-t border-[hsl(var(--gold)/0.25)] text-[10px] text-fog leading-relaxed">
+          <Separator className="my-3 bg-[hsl(var(--gold)/0.25)]" />
+          <div className="text-[10px] text-fog leading-relaxed">
             DORMANT 池绝不脱离碰撞——脱离等于死亡；SILENT 池触发器待机
           </div>
         </div>
@@ -174,7 +177,16 @@ export default function OverviewPage() {
 
         <div className="nv-card nv-card-double p-5">
           <SectionTitle>本周记忆修复 · Memory Repair</SectionTitle>
-          {repaired ? (
+          {state.busy ? (
+            /* shadcn Skeleton：引擎判定中显示骨架占位 */
+            <div className="space-y-3 anim-fade" aria-label="加载中">
+              <div className="text-[10px] text-fog">判定中…</div>
+              <Skeleton className="h-4 w-24 bg-[hsl(var(--fog)/0.2)]" />
+              <Skeleton className="h-14 w-full bg-[hsl(var(--cinnabar)/0.08)]" />
+              <Skeleton className="h-4 w-32 bg-[hsl(var(--gold)/0.2)]" />
+              <Skeleton className="h-14 w-full bg-[hsl(var(--raven)/0.08)]" />
+            </div>
+          ) : repaired ? (
             <div className="anim-fade">
               <div className="text-[10px] text-fog mb-1.5">过去理解 · {repaired.versions[repaired.versions.length - 2].at}</div>
               <div className="rounded-xl bg-[hsl(var(--cinnabar)/0.06)] border border-[hsl(var(--cinnabar)/0.2)] px-3.5 py-2.5 text-xs text-fog">

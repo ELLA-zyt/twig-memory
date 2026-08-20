@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { VAD } from '../engine/types'
 import { Seal, VineDivider } from './nouveau'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 /** @deprecated 统一使用 nouveau.Seal */
 export { Seal }
@@ -21,26 +22,41 @@ export function SectionHead({ kicker, title, right }: { kicker: string; title: s
   )
 }
 
-/** VAD 三柱 */
+/** VAD 三柱 — shadcn Tooltip 替换原生 title（无障碍 + 动画 + 可复制文本） */
 export function VadBars({ vad }: { vad: VAD }) {
   const v = Math.abs(vad.valence)
+  const label = `效价 ${vad.valence.toFixed(2)} · 唤醒 ${vad.arousal.toFixed(2)} · 支配 ${vad.dominance.toFixed(2)}`
   return (
-    <div className="flex items-end gap-[3px]" title={`V ${vad.valence.toFixed(2)} · A ${vad.arousal.toFixed(2)} · D ${vad.dominance.toFixed(2)}`}>
-      <div className="w-[3px] rounded-t-sm" style={{ height: 4 + v * 12, background: vad.valence >= 0 ? 'hsl(var(--raven))' : 'hsl(var(--cinnabar))' }} />
-      <div className="w-[3px] rounded-t-sm bg-gold" style={{ height: 4 + vad.arousal * 12 }} />
-      <div className="w-[3px] rounded-t-sm bg-fog" style={{ height: 4 + vad.dominance * 12 }} />
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-end gap-[3px] cursor-help" role="img" aria-label={label}>
+          <div className="w-[3px] rounded-t-sm" style={{ height: 4 + v * 12, background: vad.valence >= 0 ? 'hsl(var(--raven))' : 'hsl(var(--cinnabar))' }} />
+          <div className="w-[3px] rounded-t-sm bg-gold" style={{ height: 4 + vad.arousal * 12 }} />
+          <div className="w-[3px] rounded-t-sm bg-fog" style={{ height: 4 + vad.dominance * 12 }} />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent className="font-mono text-[10px] border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--card))] text-foreground shadow-md">
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
-/** 龙脉值细条 */
+/** 龙脉值细条 — shadcn Tooltip */
 export function VeinBar({ value }: { value: number }) {
   return (
-    <div className="flex items-center gap-1.5" title={`龙脉值 ${value.toFixed(2)}`}>
+    <div className="flex items-center gap-1.5">
       <span className="text-[10px] text-fog">龙脉</span>
-      <div className="nv-meter nv-meter-gold w-12 !h-[4px]">
-        <div style={{ width: `${value * 100}%` }} />
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="nv-meter nv-meter-gold w-12 !h-[4px] cursor-help">
+            <div style={{ width: `${value * 100}%` }} />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="font-mono text-[10px] border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--card))] text-foreground shadow-md">
+          龙脉值 {value.toFixed(2)} · 只管「看哪里」，不管「记不记」
+        </TooltipContent>
+      </Tooltip>
       <span className="text-[10px] font-mono text-gold">{value.toFixed(2)}</span>
     </div>
   )

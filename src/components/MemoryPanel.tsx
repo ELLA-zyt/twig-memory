@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Claim, Fragment, LogEntry, Thread } from '../engine/types'
 import FragmentStream from './FragmentStream'
 import LogFeed from './LogFeed'
@@ -31,22 +32,22 @@ export default function MemoryPanel({
   return (
     <div className="flex flex-col h-full bg-[hsl(44_36%_91%/0.5)] border-l border-[hsl(var(--gold)/0.25)]">
       <div className="shrink-0 px-3 pt-3">
-        <div className="flex gap-1 border-b border-[hsl(var(--gold)/0.25)] pb-2">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => onTab(t.key)}
-              className={cn(
-                'px-3 py-1.5 text-xs rounded-full transition-colors border',
-                tab === t.key
-                  ? 'text-raven bg-[hsl(var(--raven)/0.08)] border-[hsl(var(--raven)/0.4)]'
-                  : 'text-fog border-transparent hover:text-foreground',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* shadcn Tabs：用主题变量覆盖默认灰底，保持穆夏描金胶囊风格 */}
+        <Tabs value={tab} onValueChange={(v) => onTab(v as MemTab)}>
+          <TabsList className="bg-transparent h-auto p-0 gap-1 border-b border-[hsl(var(--gold)/0.25)] w-full rounded-none pb-2">
+            {TABS.map((t) => (
+              <TabsTrigger
+                key={t.key}
+                value={t.key}
+                className={cn(
+                  'px-3 py-1.5 text-xs rounded-full transition-colors border data-[state=active]:text-raven data-[state=active]:bg-[hsl(var(--raven)/0.08)] data-[state=active]:border-[hsl(var(--raven)/0.4)] data-[state=active]:shadow-none text-fog border-transparent hover:text-foreground',
+                )}
+              >
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <div className="text-[9px] tracking-[0.25em] text-gold py-1.5 font-display uppercase">{active.layer}</div>
       </div>
       <div className="flex-1 min-h-0 px-3">

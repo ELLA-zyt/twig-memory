@@ -11,7 +11,7 @@
  * 运行：npx tsx server/dev-smoke.ts   —— 不调真实 API，可随意重跑；确认完毕后可删除。
  */
 import { setChatTransport } from '../src/engine/llm'
-import { HeadlessMuninn, fragView, type MuninnState } from './core'
+import { HeadlessMuninn, fragView, setEmbedFn, type MuninnState } from './core'
 import { SCENARIOS, scenarioPass, scoreCounterRun } from './eval-counter'
 import { aggregate, buildRetriever, CATEGORY_NAMES, fuseRrf, parseLocoDate, tokenize, topByVector, type Frag } from './eval-locomo'
 import type { Claim } from '../src/engine/types'
@@ -83,8 +83,9 @@ function silentFixture(): MuninnState {
     { ...frag('f2', 40, '话题转开'), threadIds: ['t1'] },
     { ...frag('f3', 5, '项目推进'), threadIds: ['t2'] },
   )
+  // P1-2 修复后 getContextPacket 不再 tick，需预设 SILENT 状态（promoteSilent 由场景 11 测试）
   s.threads.push(
-    { ...thread('t1', '父亲的病', '父亲的健康状况是否稳定？', ['f1', 'f2'], 60), emotionalWeight: 0.9, dragonVein: 0.35 },
+    { ...thread('t1', '父亲的病', '父亲的健康状况是否稳定？', ['f1', 'f2'], 60), emotionalWeight: 0.9, dragonVein: 0.35, pool: 'SILENT', silentSignals: { importance: 0.95, mentionFrequency: 0.05, avoidanceSignal: 0.9, triggerThreshold: 'low' } },
     thread('t2', '项目交付', '项目能否按时交付？', ['f3'], 5),
   )
   s.fragSeq = 4
@@ -101,11 +102,10 @@ function silentFixture(): MuninnState {
 
   const st = e.getState()
   const t1 = st.threads.find((t) => t.id === 't1')!
-  // 入池证据是 silentSignals（只有 promoteSilent 会填）；同一次 ingest 内触发器已把池位带回 ACTIVE
-  check('tick 将符合条件线索推入 SILENT（silentSignals 已填）', !!t1.silentSignals && t1.silentSignals.triggerThreshold === 'low', t1.silentSignals)
   check('SILENT 不参与规则碰撞（未记软链接）', r.action !== 'softlink', r)
   check('规则兜底触发器唤醒（charOverlap≥0.5）', r.silentWake?.threadId === 't1', r)
   check('唤醒后回到 ACTIVE 且记入历史', t1.pool === 'ACTIVE' && t1.history.some((h) => h.note.includes('触发器唤醒')), t1.history.at(-1))
+  check('唤醒后 silentSignals 已清空（P0-3 修复）', !t1.silentSignals, t1.silentSignals)
 }
 
 {
@@ -646,6 +646,179 @@ function rementionFixture(): MuninnState {
   check('RRF 双路命中者优先', fused[0]?.id === 'V2' && fused.length === 2)
 }
 
+/* ================= 场景十 b：碰撞候选的向量召回排序（注入 / 保底 / 失败回退） ================= */
+{
+  console.log('\n[10b] 碰撞候选：向量召回排序 / 新线索保底 / 失败回龙脉')
+  resetMocks()
+  const st = baseState()
+  // 14 条线索（超候选上限 12）：t01–t12 龙脉靠前但与事件无关；
+  // t13 龙脉垫底但语义相关（含「钢琴」）；t14 新登记（历史 1 条，保底放行）
+  st.threads = [
+    ...Array.from({ length: 12 }, (_, i) => thread(`t${String(i + 1).padStart(2, '0')}`, `无关话题${i + 1}`, `无关问题${i + 1}何时闭合？`, ['x1', 'x2', 'x3'], 30)),
+    thread('t13', '钢琴练习瓶颈', '练琴何时突破瓶颈？', ['x4', 'x5', 'x6'], 30),
+    thread('t14', '新登记的话题', '新话题何时闭合？', ['x7'], 1),
+  ]
+  const e = new HeadlessMuninn(st)
+
+  let seen = ''
+  on(/碰撞判定模块/, (msgs) => {
+    seen = msgs.map((m) => m.content).join('\n')
+    return JSON.stringify({ verdict: '无关', registerThread: false, reply: 'mock 回复，长度足够。' })
+  })
+
+  // 假 embedder：含「钢琴」→ [1,1]，其余 → [0,1]（cosine 与语义亲疏一致）
+  setEmbedFn(async (texts) => texts.map((t) => (t.includes('钢琴') ? [1, 1] : [0, 1])))
+  await e.ingest('今天练了三小时钢琴，手指都酸了')
+  check('向量召回：语义相关但龙脉垫底的 t13 进入候选', seen.includes('id=t13'), seen)
+  check('新线索保底放行与排序方式无关：t14 在候选内', seen.includes('id=t14'), seen)
+  check('候选数 = 截断 12 + 保底 1', (seen.match(/id=t\d+/g) ?? []).length === 13, seen)
+
+  seen = ''
+  setEmbedFn(async () => { throw new Error('embed down') })
+  await e.ingest('又练了一小时钢琴')
+  check('向量调用失败 → 回退龙脉排序：t13 不在候选', !seen.includes('id=t13'), seen)
+  check('回退路径新线索仍保底', seen.includes('id=t14'), seen)
+
+  setEmbedFn(null)
+}
+
+/* ================= 场景十一：P0-1 ThreadEvent.day 老化 + SILENT 入池真实触发 ================= */
+{
+  console.log('\n[11] P0-1 ThreadEvent.day 老化 → SILENT 入池在真实 tick 路径触发')
+  resetMocks()
+  // 构造一个符合 SILENT 入池条件的线索：曾活跃 ≥2 次、情感权重 ≥0.7、≥21 天无推进、存在 ≥45 天
+  // 关键：history 的 day 必须由 tick() 从 Fragment.day 派生，而非 fixture 硬编码
+  const s = baseState(30) // lastTickDate = 30 天前
+  s.fragments.push(
+    { ...frag('f1', 60, '父亲复查'), threadIds: ['t1'] },
+    { ...frag('f2', 40, '话题转开'), threadIds: ['t1'] },
+  )
+  s.threads.push(
+    { ...thread('t1', '父亲的病', '父亲的健康状况是否稳定？', ['f1', 'f2'], 60), emotionalWeight: 0.9, dragonVein: 0.7 },
+  )
+  s.fragSeq = 3
+
+  // tick 前：ThreadEvent.day 是 fixture 设的值（60+i*5）
+  const beforeLast = s.threads[0].history[s.threads[0].history.length - 1].day
+  const beforeFirst = s.threads[0].history[0].day
+
+  const e = new HeadlessMuninn(s)
+  // ingest 触发 tick()：lastTickDate=30天前 → elapsed=30 → ThreadEvent.day 应从 Fragment.day 重新派生
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '无关', threadId: null, registerThread: false, reply: 'mock 回复，长度足够。' }))
+  await e.ingest('一件普通的事')
+
+  const t1 = e.getState().threads.find((t) => t.id === 't1')!
+  const fragDay = (id: string) => e.getState().fragments.find((f) => f.id === id)?.day ?? -1
+  // ThreadEvent.day 应等于关联 Fragment 的 day（P0-1 修复后）
+  check('ThreadEvent.day 从 Fragment.day 派生（非硬编码 0）',
+    t1.history[0].day === fragDay('f1') && t1.history[1].day === fragDay('f2'),
+    { histDay: [t1.history[0].day, t1.history[1].day], fragDay: [fragDay('f1'), fragDay('f2')] })
+
+  // SILENT 入池判定：f1=60天前，f2=40天前 → lastDay=40 ≥ 21 ✓，firstDay=60 ≥ 45 ✓ → 入池
+  check('SILENT 入池在真实 tick 路径触发（lastDay≥21 + firstDay≥45）',
+    t1.pool === 'SILENT' && !!t1.silentSignals, { pool: t1.pool, signals: t1.silentSignals })
+}
+
+/* ================= 场景十二：P0-3 SILENT 唤醒后清空 silentSignals → 可重新入池 ================= */
+{
+  console.log('\n[12] P0-3 SILENT 唤醒后 silentSignals 清空 → 再次沉默可重新入池')
+  resetMocks()
+  const s = baseState(30)
+  s.fragments.push(
+    { ...frag('f1', 60, '父亲复查'), threadIds: ['t1'] },
+    { ...frag('f2', 40, '话题转开'), threadIds: ['t1'] },
+  )
+  s.threads.push(
+    { ...thread('t1', '父亲的病', '父亲的健康状况是否稳定？', ['f1', 'f2'], 60), emotionalWeight: 0.9, dragonVein: 0.7 },
+  )
+  s.fragSeq = 3
+  const e = new HeadlessMuninn(s)
+
+  // 第一次 ingest → tick → 入 SILENT
+  // dragonVein 0.7 - 0.015*30 = 0.25 > 0.15 → 不降级，promoteSilent 可触发
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '无关', threadId: null, registerThread: false, reply: 'mock 回复，长度足够。' }))
+  await e.ingest('普通事件一')
+  const t1 = e.getState().threads.find((t) => t.id === 't1')!
+  check('第一次入 SILENT', t1.pool === 'SILENT' && !!t1.silentSignals)
+
+  // 唤醒：触发 silentWakeCheck
+  resetMocks()
+  on(/沉默池唤醒判定模块/, JSON.stringify({ threadId: 't1', reply: '我在，想说到哪儿就说到哪儿。' }))
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '无关', threadId: null, registerThread: false, reply: 'mock 回复。' }))
+  await e.ingest('说起父亲的健康')
+  const t1b = e.getState().threads.find((t) => t.id === 't1')!
+  check('唤醒后回到 ACTIVE', t1b.pool === 'ACTIVE')
+  check('唤醒后 silentSignals 已清空（P0-3 修复）', !t1b.silentSignals, t1b.silentSignals)
+
+  // 再次构造长期沉默 → 应能重新入池
+  // P0-1 修复后 ThreadEvent.day 由 Fragment.day 派生，需老化碎片 dateLabel 而非直接设 history.day
+  const state = e.getState()
+  const tzDate = (n: number) => new Date(Date.now() - n * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+  state.lastTickDate = tzDate(30)
+  // 唤醒时 ingest 创建了新碎片（fragments[0]，day=0）；手动老化到 25 天前
+  const wakeFrag = state.fragments[0]
+  wakeFrag.day = 25
+  wakeFrag.dateLabel = tzDate(25)
+  // 老化原始碎片（模拟时间流逝）
+  state.fragments.find((f) => f.id === 'f1')!.dateLabel = tzDate(85)
+  state.fragments.find((f) => f.id === 'f2')!.dateLabel = tzDate(65)
+  resetMocks()
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '无关', threadId: null, registerThread: false, reply: 'mock 回复。' }))
+  await e.ingest('又一件事')
+  const t1c = e.getState().threads.find((t) => t.id === 't1')!
+  check('再次沉默后重新入 SILENT（P0-3 修复后 silentSignals 不阻止）', t1c.pool === 'SILENT', { pool: t1c.pool, signals: !!t1c.silentSignals })
+}
+
+/* ================= 场景十三：P0-4 abandoned 线索热路径扑空后被重激活 ================= */
+{
+  console.log('\n[13] P0-4 abandoned 线索：热路径扑空 → 归档层扫描 → 重激活')
+  resetMocks()
+  const s = baseState()
+  s.fragments.push(frag('f1', 30, '宿舍报修', 0.4))
+  s.threads.push({
+    ...thread('t_net', '宿舍网络', '晚间掉线问题能否解决？', ['f1'], 30),
+    status: 'abandoned' as const,
+    pool: 'ARCHIVE' as const,
+    closureReason: '久无推进，龙脉值衰减归零',
+  })
+  s.fragSeq = 2
+  const e = new HeadlessMuninn(s)
+
+  // LLM 碰撞无命中 + silentWake 无命中 → 归档层扫描
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '无关', threadId: null, registerThread: false, reply: 'mock 回复。' }))
+  failWith(/沉默池唤醒/) // 无 SILENT 线索，也不会调 LLM 唤醒
+  // 输入含「宿舍网络」字符 → charOverlap 应 ≥0.4 → 重激活
+  const r = await e.ingest('宿舍网络又掉线了')
+  const t = e.getState().threads.find((x) => x.id === 't_net')!
+  check('abandoned 线索被重激活（status → unresolved）', t.status === 'unresolved', t.status)
+  check('重激活后池位为 DORMANT', t.pool === 'DORMANT', t.pool)
+  check('重激活后 closureReason 已清除', !t.closureReason)
+  check('IngestResult 记录了 silentWake（归档重激活）', !!r.silentWake, r.silentWake)
+}
+
+/* ================= 场景十四：P2-5 反转标记 → 关联论断置信下降 ================= */
+{
+  console.log('\n[14] P2-5 反转 verdict → 关联论断置信下降（不同于推进）')
+  resetMocks()
+  const s = baseState()
+  s.fragments.push(frag('f1', 5, '深夜写作', 0.7), frag('f2', 3, '存稿推进', 0.5))
+  s.threads.push(thread('t1', '写作主线', '写作往哪走？', ['f1', 'f2'], 5))
+  s.claims.push({
+    id: 'c1', docTitle: '驱动力', text: '写作是她的核心驱动力。', conviction: 0.8,
+    evidenceIds: ['f1'], counterEvidence: [], boundary: '——',
+    versions: [{ at: daysAgoISO(10), text: '写作是她的核心驱动力。', conviction: 0.8, reason: '初稿' }],
+    status: 'active',
+  })
+  s.fragSeq = 3; s.claimSeq = 2
+  const e = new HeadlessMuninn(s)
+
+  on(/碰撞判定模块/, JSON.stringify({ verdict: '反转', threadId: 't1', registerThread: false, reply: '轨迹被否定了。' }))
+  await e.ingest('我再也不想写了')
+  const c1 = e.getState().claims.find((c) => c.id === 'c1')!
+  check('反转后关联论断置信下降 0.8 → 0.75', Math.abs(c1.conviction - 0.75) < 1e-9, c1.conviction)
+  check('版本史 +1 且标记反转', c1.versions.length === 2 && c1.versions[1].reason.includes('反转'))
+}
+
 /* ================= 场景五：LLM 全挂时的降级 ================= */
 {
   console.log('\n[5] LLM 全挂：reflect 只推进 tick，结构不动')
@@ -655,7 +828,8 @@ function rementionFixture(): MuninnState {
   const before = JSON.stringify({ t: e.getState().threads.map((x) => x.id + x.status), c: e.getState().claims.length })
   const out = await e.reflect()
   const after = JSON.stringify({ t: e.getState().threads.map((x) => x.id + x.status), c: e.getState().claims.length })
-  check('六个环节全部如实上报 skipped', out.skipped.length === 6, out)
+  check('全部环节如实上报 skipped（6 = claims/counter/synthetic/merge/split/audit；无 contested → remention 不触发）',
+    out.skipped.length === 6, out.skipped)
   check('线程/论断结构零改动', before === after)
 }
 

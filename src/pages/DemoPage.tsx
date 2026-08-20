@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import ChatPane from '../components/ChatPane'
 import ClosureOverlay from '../components/ClosureOverlay'
 import DemoTimeline from '../components/DemoTimeline'
@@ -16,6 +17,7 @@ export default function DemoPage() {
   const [hlFrag, setHlFrag] = useState<string | null>(null)
   const [showClosure, setShowClosure] = useState(false)
   const lastClosure = useRef(0)
+  const lastCompleted = useRef<DemoKey[]>([])
 
   // 步骤完成 → 自动推进到下一未完成的节点；伏笔回收 → 显影浮层
   // （在引擎订阅回调中更新，避免渲染级联）
@@ -28,6 +30,16 @@ export default function DemoPage() {
     if (s.closureFlash > lastClosure.current) {
       lastClosure.current = s.closureFlash
       setShowClosure(true)
+    }
+    // shadcn Sonner：关键记忆事件 → 全局通知（仅在步骤首次完成时触发）
+    const newlyDone = s.completedSteps.filter((k) => !lastCompleted.current.includes(k))
+    lastCompleted.current = s.completedSteps
+    for (const k of newlyDone) {
+      if (k === 'contrast') toast.success('记忆修复完成', { description: '旧限制解除 → 相关线索关闭 → 限制模型更新' })
+      if (k === 'import') toast.success('历史压缩完成', { description: '1423 条消息 → 37 事件 / 12 线索 / 5 核心认识' })
+      if (k === 'counter') toast.warning('认识冲突已修正', { description: '发现冲突 → 降低置信 → 修改认识 · 推理链全程留痕' })
+      if (k === 'closure') toast.success('草蛇灰线显影', { description: '45 天前悬置的问题，今日得到回答 · 叙事闭环' })
+      if (k === 'finale') toast.info('演示完成', { description: '可自由探索——包括那些她平时不太提的事' })
     }
   }), [engine])
 
