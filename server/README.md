@@ -263,6 +263,43 @@ mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径
 `qa.evidence` 做命中率分析——BM25 top-8 证据命中 single-hop 约 54-60%，
 是当前事实底盘的主要瓶颈（转述鸿沟），HyDE 即为此而设。
 
+## 评测：LongMemEval 长程记忆基线（ICLR 2025）
+
+```bash
+# 数据（oracle ~15MB / s ~265MB，一次性；HuggingFace 连不上用 hf-mirror.com）
+curl.exe -sL https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_oracle.json \
+  -o server/eval-data/longmemeval_oracle.json
+curl.exe -sL https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json \
+  -o server/eval-data/longmemeval_s_cleaned.json
+
+npx tsx server/eval-longmemeval.ts --data oracle --limit 10                              # 微试点
+npx tsx server/eval-longmemeval.ts --data s --embed --k 15                               # 标准 500 题 + 混合检索
+npx tsx server/eval-longmemeval.ts --data s --limit 50 --types single-session-user       # 按题型子集
+npx tsx server/eval-longmemeval.ts --data oracle --offset 54 --limit 6                  # 跳到 abstention 题
+npx tsx server/eval-longmemeval.ts --data s --no-hyde                                    # 消融：关闭 HyDE
+```
+
+数据（xiaowu0162/longmemeval-cleaned，ICLR 2025）三个文件：
+- `oracle` — 仅证据会话（检索零难度，测作答质量与 abstention 判定）
+- `s` — 标准 ~40 会话 / ~115k tokens（主基准，同 LoCoMo 定位：碎片层 + 检索）
+- `m` — ~500 会话（超长，需更强检索）
+
+管线与 LoCoMo 一致：每个实例的全部会话轮次 → 碎片（零 LLM 直灌）→ 每题检索 top-k
+（BM25 + 向量 RRF + HyDE）→ LLM 仅凭检索碎片作答 → 独立 LLM 判分。判分 rubric 逐字来自
+官方 `evaluate_qa.py`，按题型分派（temporal-reasoning 容忍 off-by-one、knowledge-update
+只看更新后答案、single-session-preference 按 rubric 判、abstention 正确拒答才得分）。
+
+500 题 6 题型 + 30 abstention：single-session-user(70) / single-session-assistant(56) /
+single-session-preference(30) / multi-session(133) / temporal-reasoning(133) /
+knowledge-update(78) / abstention(30，question_id 以 `_abs` 结尾)。
+
+指标（对照官方 `print_qa_metrics.py`）：各题型准确率 / Task-averaged（6 类宏平均）/
+Overall（全部微平均）/ Abstention（单独）/ 检索召回（turn-level `has_answer` 命中率 +
+session-level `answer_session_ids` 命中率，诊断用，abstention 题不计）。
+
+`--embed` / `--no-hyde` / `--pace` / 作答判分模型切换与 LoCoMo 完全相同（共用 `.env.local`）。
+判分模型与官方不同（官方用 GPT-4o，本管线用 `MUNINN_MODEL`），对照结论以「参照口径」表述。
+
 ## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
 
 | # | 债务 | 状态 |

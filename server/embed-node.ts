@@ -2,8 +2,11 @@
  * Node 端向量嵌入传输层：直连硅基流动（SiliconFlow）embeddings API，OpenAI 兼容。
  * 密钥从环境变量读取（SF_API_KEY / SILICONFLOW_API_KEY）。
  *
- * 磁盘缓存（eval-data/embed-cache.json，key = model:sha1(text)）：
- * LoCoMo 反复重跑时碎片文本不变，嵌入只付一次钱、只等一次网络。
+ * 分片缓存（eval 用）：每个实例一个 JSON 文件（embed-cache/{shardId}.json），
+ * 嵌完一批立刻落盘——跑到一半断电只损失当前实例，不连坐。
+ * shardId = question_id（LongMemEval）/ sample_id（LoCoMo）；不传时走遗留单文件缓存（core.ts 引擎路径）。
+ *
+ * 迁移：分片查不到时回查遗留 embed-cache.json，命中则懒拷贝到分片——老数据不浪费。
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -18,27 +21,64 @@ const MAX_RETRIES = 4
 const BATCH_SIZE = 64
 
 const here = dirname(fileURLToPath(import.meta.url))
-/** 缓存路径惰性解析（MUNINN_EMBED_CACHE 可覆盖；须在 loadEnvLocal 之后读取，故不作为模块级常量） */
+/** 遗留单文件缓存路径（core.ts 引擎路径用；须在 loadEnvLocal 之后读取，故不作为模块级常量） */
 const cacheFile = (): string => process.env.MUNINN_EMBED_CACHE || join(here, 'eval-data', 'embed-cache.json')
+/** 分片缓存目录（eval 用；每实例一个文件） */
+const shardDir = (): string => process.env.MUNINN_EMBED_CACHE_DIR || join(here, 'eval-data', 'embed-cache')
 
-let cache: Record<string, number[]> | null = null
-let cacheDirty = false
+/* ---------------- 分片缓存（每实例一文件，中断只损当前实例） ---------------- */
 
-function cacheLoad(): Record<string, number[]> {
-  if (cache) return cache
-  try {
-    cache = existsSync(cacheFile()) ? (JSON.parse(readFileSync(cacheFile(), 'utf8')) as Record<string, number[]>) : {}
-  } catch {
-    cache = {}
+interface ShardStore { data: Record<string, number[]>; dirty: boolean }
+const shardStores = new Map<string, ShardStore>()
+
+function getShardStore(shardId: string): ShardStore {
+  let s = shardStores.get(shardId)
+  if (!s) {
+    const file = join(shardDir(), `${shardId}.json`)
+    try {
+      const data = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as Record<string, number[]> : {}
+      s = { data, dirty: false }
+    } catch {
+      s = { data: {}, dirty: false }
+    }
+    shardStores.set(shardId, s)
   }
-  return cache
+  return s
 }
 
-function cacheSave(): void {
-  if (!cacheDirty || !cache) return
+function saveShard(shardId: string): void {
+  const s = shardStores.get(shardId)
+  if (!s || !s.dirty) return
+  mkdirSync(shardDir(), { recursive: true })
+  // 分片文件小（单实例 ~500 条 × 1024 维 ≈ 4MB），不会撞 V8 字符串上限
+  writeFileSync(join(shardDir(), `${shardId}.json`), JSON.stringify(s.data), 'utf8')
+  s.dirty = false
+}
+
+/* ---------------- 遗留单文件缓存（core.ts 引擎路径用；eval 已迁移到分片） ---------------- */
+
+let legacyCache: Record<string, number[]> | null = null
+let legacyCacheDirty = false
+
+function legacyCacheLoad(): Record<string, number[]> {
+  if (legacyCache) return legacyCache
+  try {
+    legacyCache = existsSync(cacheFile()) ? JSON.parse(readFileSync(cacheFile(), 'utf8')) as Record<string, number[]> : {}
+  } catch {
+    legacyCache = {}
+  }
+  return legacyCache
+}
+
+function legacyCacheSave(): void {
+  if (!legacyCacheDirty || !legacyCache) return
   mkdirSync(dirname(cacheFile()), { recursive: true })
-  writeFileSync(cacheFile(), JSON.stringify(cache), 'utf8')
-  cacheDirty = false
+  try {
+    writeFileSync(cacheFile(), JSON.stringify(legacyCache), 'utf8')
+    legacyCacheDirty = false
+  } catch (err) {
+    console.warn(`[embed] 遗留缓存写入跳过（${Object.keys(legacyCache).length} 条）：${err instanceof Error ? err.message : err}`)
+  }
 }
 
 const cacheKey = (model: string, text: string): string =>
@@ -57,12 +97,17 @@ export function registerEmbedProvider(): boolean {
   return true
 }
 
+/** BGE-M3 最大 8192 tokens；按字符截断到 512（英文 ~128 tokens），超长碎片只取前缀做语义签名——
+ *  嵌入只做召回预筛（碰撞候选排序），精确匹配靠 BM25 词法路，向量路只需语义指纹即可 */
+const MAX_EMBED_CHARS = 512
+
 const normalize = (v: number[]): number[] => {
   const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1
   return v.map((x) => x / n)
 }
 
 async function embedBatch(texts: string[], model: string, baseUrl: string, apiKey: string): Promise<number[][]> {
+  const payload = texts.map((t) => t.length > MAX_EMBED_CHARS ? t.slice(0, MAX_EMBED_CHARS) : t)
   let lastErr: unknown = null
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** (attempt - 1)))
@@ -72,14 +117,17 @@ async function embedBatch(texts: string[], model: string, baseUrl: string, apiKe
       const resp = await fetch(`${baseUrl}/v1/embeddings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, input: texts }),
+        body: JSON.stringify({ model, input: payload }),
         signal: ctrl.signal,
       })
       if ((resp.status === 429 || resp.status >= 500) && attempt < MAX_RETRIES) {
         lastErr = new Error(`HTTP ${resp.status}（嵌入限流/服务端错误，退避重试）`)
         continue
       }
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '')
+        throw new Error(`HTTP ${resp.status}: ${body.slice(0, 300)}`)
+      }
       const data = await resp.json()
       const rows = data?.data
       if (!Array.isArray(rows) || rows.length !== texts.length) throw new Error('嵌入响应条数不符')
@@ -99,20 +147,37 @@ async function embedBatch(texts: string[], model: string, baseUrl: string, apiKe
   throw lastErr ?? new Error('嵌入调用失败')
 }
 
-/** 批量嵌入（自动分块 + 磁盘缓存 + 单位化，cosine 直接点积）。无 key 时抛错，调用方先 embeddingsAvailable() 探活 */
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+/**
+ * 批量嵌入（自动分块 + 磁盘缓存 + 单位化，cosine 直接点积）。无 key 时抛错，调用方先 embeddingsAvailable() 探活。
+ *
+ * shardId：评测传实例 ID（question_id / sample_id），缓存分片到 embed-cache/{shardId}.json，
+ *          每批落盘，中断只损失当前实例。不传走遗留单文件缓存（core.ts 引擎路径）。
+ * 迁移：分片查不到时回查遗留 embed-cache.json，命中则懒拷贝到分片——老数据不浪费。
+ */
+export async function embedTexts(texts: string[], shardId?: string): Promise<number[][]> {
   loadEnvLocal()
   const apiKey = process.env.SF_API_KEY || process.env.SILICONFLOW_API_KEY
   if (!apiKey) throw new Error('缺 SF_API_KEY / SILICONFLOW_API_KEY')
   const model = process.env.MUNINN_EMBED_MODEL || 'BAAI/bge-m3'
   const baseUrl = (process.env.SF_BASE_URL || 'https://api.siliconflow.cn').replace(/\/+$/, '').replace(/\/v1$/, '')
 
-  const store = cacheLoad()
-  const out: (number[] | null)[] = texts.map((t) => store[cacheKey(model, t)] ?? null)
+  const shardStore = shardId ? getShardStore(shardId) : null
+  const store: Record<string, number[]> = shardStore ? shardStore.data : legacyCacheLoad()
+
+  const out: (number[] | null)[] = texts.map((t) => {
+    const key = cacheKey(model, t)
+    if (store[key]) return store[key]
+    // 迁移：分片查不到时回查遗留缓存，命中则懒拷贝
+    if (shardStore) {
+      const lv = legacyCacheLoad()[key]
+      if (lv) { store[key] = lv; shardStore.dirty = true; return lv }
+    }
+    return null
+  })
   const pending: { i: number; text: string }[] = []
   out.forEach((v, i) => { if (!v) pending.push({ i, text: texts[i] }) })
   if (pending.length > 0) {
-    console.log(`[embed] ${texts.length} 条文本，缓存命中 ${texts.length - pending.length}，待嵌入 ${pending.length}（model=${model}）`)
+    console.log(`[embed] ${texts.length} 条文本，缓存命中 ${texts.length - pending.length}，待嵌入 ${pending.length}（model=${model}${shardId ? `, shard=${shardId}` : ''}）`)
     for (let b = 0; b < pending.length; b += BATCH_SIZE) {
       const chunk = pending.slice(b, b + BATCH_SIZE)
       const vecs = await embedBatch(chunk.map((c) => c.text), model, baseUrl, apiKey)
@@ -120,8 +185,8 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         store[cacheKey(model, c.text)] = vecs[j]
         out[c.i] = vecs[j]
       })
-      cacheDirty = true
-      cacheSave() // 每批落盘：中途崩溃不丢已付过费的向量
+      if (shardStore) { shardStore.dirty = true; saveShard(shardId!) }
+      else { legacyCacheDirty = true; legacyCacheSave() }
     }
   }
   return out as number[][]

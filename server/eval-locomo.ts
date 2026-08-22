@@ -301,8 +301,8 @@ async function main() {
     let fragVecs: number[][] | null = null
     let qVecs: number[][] | null = null
     if (useEmbed) {
-      fragVecs = await embedTexts(frags.map((f) => `${f.text} ${f.date}`))
-      qVecs = await embedTexts(queries)
+      fragVecs = await embedTexts(frags.map((f) => `${f.text} ${f.date}`), conv.sample_id)
+      qVecs = await embedTexts(queries, conv.sample_id)
     }
     const retrieved = qas.map((_, i) => {
       const bm25 = retrieve(queries[i], k * 2)
