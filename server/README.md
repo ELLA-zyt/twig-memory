@@ -300,6 +300,15 @@ session-level `answer_session_ids` 命中率，诊断用，abstention 题不计�
 `--embed` / `--no-hyde` / `--pace` / 作答判分模型切换与 LoCoMo 完全相同（共用 `.env.local`）。
 判分模型与官方不同（官方用 GPT-4o，本管线用 `MUNINN_MODEL`），对照结论以「参照口径」表述。
 
+**全量基线（2026-08-22，LongMemEval_S，commit `59352ea`）**：
+k=15，BM25 + BGE-M3 向量 RRF + HyDE（嵌入经硅基流动），作答/判分 MiniMax M3（官方 API 直连）。
+500 题零批调用失败——
+single-session-user **1.000** / single-session-assistant **0.982** / knowledge-update **0.885** /
+temporal-reasoning **0.820** / multi-session **0.812** / single-session-preference **0.567** /
+**Task-averaged 0.844 / Overall 0.856 / Abstention 0.867**（26/30）。
+检索召回 turn-level **0.962** / session-level **0.989**。
+明细：`server/eval-data/longmemeval-s-result-1787405412219.json`（force-added，gitignored 目录破例入库）。
+
 ## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
 
 | # | 债务 | 状态 |
