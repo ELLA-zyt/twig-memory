@@ -92,10 +92,12 @@ docs/            技术设计文档 v1.3（完整机制论证与设计债务总�
 - **设计债务 ①–⑧ 已清偿**（②为部分缓解并已如实声明）：认识层自动抽取、异源反证搜索（红队 persona + 强制裁决留痕 + 防教条化置信衰减）、盲推导审计（null model 基线 + 用户可见标记）、对照窗口 + 风险分级（含危机中止阀）、事实层本人修正标注、contested 再提门槛量化与防纠缠（两否封存）、冲突测试集构造规范。逐条对照表见 [server/README.md](server/README.md)。
 - **冲突响应评测基线 22/22（100%）**：22 例场景类型学测试集 + 结构化状态迁移机械盲评（moonshot-v1-8k，2026-08），首轮跑批即抓到并修复一例负例误报。
 - **LoCoMo 事实底盘验收通过（设计债务⑨已清）**：全量 10 会话 1986 题零批调用失败，**总分 0.640**——双口径均过（四类及格线宏平均 0.5551 / 文档总分口径 0.602），且高于 mem0 参照宏平均 0.617。single-hop（0.800）与 temporal（0.726）两类直接超过 mem0 参照值；open-domain（0.531 vs 0.729）为已知短板，已立项为下一靶子。配置：k=15、BM25 + BGE-M3 向量 RRF 混合检索 + HyDE 扩查询（嵌入经硅基流动），作答/判分模型 MiniMax M3（官方 API 直连）。mem0 数值为论文参照值（非同场裁判），见 [server/README.md](server/README.md)。
+- **LongMemEval-S 长程记忆基线（ICLR 2025）**：全量 500 题零批调用失败，**Overall 0.856 / Task-averaged 0.844 / Abstention 0.867**。single-session-user **1.000** / single-session-assistant **0.982** / knowledge-update **0.885** / temporal-reasoning **0.820** / multi-session **0.812** / single-session-preference **0.567**。检索召回 turn-level 0.962 / session-level 0.989。管线同 LoCoMo（碎片层 + 检索，不经叙事层），判分 rubric 逐字来自官方 `evaluate_qa.py`；判分模型 MiniMax M3（官方用 GPT-4o，参照口径）。single-session-preference（0.567）为已知短板——测的是「理解偏好后个性化作答」，与叙事层评测分工。配置与明细见 [server/README.md](server/README.md)。
 
 ## Roadmap
 
 - [ ] open-domain 跨碎片推断（0.531 vs mem0 参照 0.729）：LoCoMo 唯一未过线类别，下一个工程靶子；先跑消融对照（`--no-embed` / `--no-hyde`）与金标证据命中率分析，再动结构
+- [ ] single-session-preference 个性化作答（LongMemEval 0.567）：13 道错题中 9 道证据命中但模型拒答——作答层 prompt 对偏好推断的指引不足，待修
 - [x] 设计债务⑪：合规声明文本起草（not-a-medical-device / 情感数据最小化 / 命名惯例附则 → [docs/COMPLIANCE.md](docs/COMPLIANCE.md)）
 - [ ] 评测系统「衔枝」独立化：冲突测试集已落地，待扩场景类型学与独立盲评流程
 - [x] embedding 向量预筛进引擎碰撞候选排序（LLM 路径：配 `SF_API_KEY` 即启用，失败自动回龙脉排序；无 LLM 的规则兜底路径保留字符重合近似并继续声明）
