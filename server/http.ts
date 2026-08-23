@@ -48,9 +48,15 @@ import { registerNodeTransport } from './llm-node'
 import { createMcpServer } from './mcp-server'
 import { chatTurn } from './host-loop'
 import { registerEmbedProvider } from './embed-node'
+import * as Journal from './services/journal'
+import * as Soliloquy from './services/soliloquy'
+import * as Note from './services/notes'
+import * as Stamp from './services/stamps'
+import { isValidStampType } from '../shared/stamps'
 
 const PORT = Number(process.env.PORT || 7300)
 const AUTH_TOKEN = process.env.MUNINN_AUTH_TOKEN || ''
+const todayStr = () => new Date().toISOString().slice(0, 10)
 const CORS_ORIGIN = process.env.MUNINN_CORS_ORIGIN || '*'
 const RATE_LIMIT = Number(process.env.MUNINN_RATE_LIMIT || 0)
 const manager = new EngineManager()
@@ -266,6 +272,133 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/v1/claims') {
       if (!userId) return send(res, 400, { error: 'userId 必填' })
       return send(res, 200, manager.get(userId).listClaims())
+    }
+
+    /* ---------- 新前端：日记/心迹/便签/印章 ---------- */
+
+    if (req.method === 'GET' && url.pathname === '/v1/journal') {
+      const date = url.searchParams.get('date') ?? todayStr()
+      return send(res, 200, { date, content: Journal.getJournal(userId, date) ?? '' })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/journal/range') {
+      const from = url.searchParams.get('from') ?? todayStr()
+      const to = url.searchParams.get('to') ?? todayStr()
+      const all = Journal.listJournals(userId)
+      const range = all.filter((j) => j.date >= from && j.date <= to)
+      return send(res, 200, { from, to, entries: range })
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/journal/generate') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      if (!uid) return send(res, 400, { error: 'userId 必填' })
+      const date = todayStr()
+      const state = manager.get(uid).getState()
+      const summary = state.fragments.slice(0, 10).map((f) => `- ${f.title}`).join('\n')
+      const content = Journal.generateJournal(summary)
+      Journal.saveJournal(uid, date, content)
+      return send(res, 200, { date, content })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/soliloquy') {
+      const date = url.searchParams.get('date') ?? todayStr()
+      return send(res, 200, { date, content: Soliloquy.getSoliloquy(userId, date) ?? '' })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/soliloquy/recent') {
+      const limit = Number(url.searchParams.get('limit') ?? 7)
+      return send(res, 200, { entries: Soliloquy.listSoliloquy(userId).slice(0, limit) })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/notes/current') {
+      if (!userId) return send(res, 400, { error: 'userId 必填' })
+      return send(res, 200, { note: Note.currentNote(userId) })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/notes') {
+      const page = Number(url.searchParams.get('page') ?? 1)
+      const limit = Number(url.searchParams.get('limit') ?? 20)
+      return send(res, 200, Note.listNotes(userId, page, limit))
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/notes') {
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      const content = String(body.content ?? '').trim()
+      if (!uid || !content) return send(res, 400, { error: 'userId 和 content 必填' })
+      const note = Note.createNote(uid, content)
+      return send(res, 200, note)
+    }
+
+    if (req.method === 'POST' && url.pathname.startsWith('/v1/notes/') && url.pathname.endsWith('/read')) {
+      const noteId = url.pathname.slice('/v1/notes/'.length, -'/read'.length)
+      const note = Note.markRead(userId, noteId)
+      return send(res, note ? 200 : 404, { note })
+    }
+
+    if (req.method === 'POST' && url.pathname.startsWith('/v1/notes/') && url.pathname.endsWith('/respond')) {
+      const noteId = url.pathname.slice('/v1/notes/'.length, -'/respond'.length)
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      const text = String(body.text ?? '').trim()
+      const mood = body.mood ? String(body.mood) : undefined
+      if (!uid || !text) return send(res, 400, { error: 'userId 和 text 必填' })
+      const engine = manager.get(uid)
+      const note = Note.respondNote(uid, noteId, text, mood, engine)
+      manager.persist(uid)
+      return send(res, note ? 200 : 404, { note })
+    }
+
+    if (req.method === 'POST' && url.pathname.startsWith('/v1/notes/') && url.pathname.endsWith('/stamp')) {
+      const noteId = url.pathname.slice('/v1/notes/'.length, -'/stamp'.length)
+      const body = await readBody(req)
+      const uid = String(body.userId ?? '')
+      const type = String(body.type ?? '')
+      if (!uid || !type) return send(res, 400, { error: 'userId 和 type 必填' })
+      if (!isValidStampType(type)) return send(res, 400, { error: '无效印章类型' })
+      const note = Note.readNote(uid, noteId)
+      if (!note) return send(res, 404, { error: '便签不存在' })
+      const engine = manager.get(uid)
+      const result = Stamp.stampNote(uid, noteId, note.content, type, engine)
+      // 更新便签上的印章快照
+      note.stamp = { type: result.record.type, beadType: result.record.beadType, beadName: result.jar.beadName, stampedAt: result.record.stampedAt }
+      Note.saveNoteByPath(uid, note)
+      manager.get(uid).setStamps(Stamp.loadStamps(uid))
+      manager.persist(uid)
+      return send(res, 200, result)
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/stamps') {
+      if (!userId) return send(res, 400, { error: 'userId 必填' })
+      return send(res, 200, Stamp.listStamps(userId))
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/stamps/recent') {
+      const limit = Number(url.searchParams.get('limit') ?? 7)
+      return send(res, 200, { recent: Stamp.recentStamps(userId, limit) })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/calendar') {
+      const yearMonth = url.searchParams.get('month') ?? todayStr().slice(0, 7)
+      const journals = Journal.listJournals(userId).filter((j) => j.date.startsWith(yearMonth)).map((j) => j.date)
+      const notes = Note.listNotes(userId, 1, 1000).notes.filter((n) => n.date.startsWith(yearMonth)).map((n) => n.date)
+      const stamps = Stamp.listStamps(userId).records.filter((r) => r.stampedAt.slice(0, 7).replace(/-/g, '').startsWith(yearMonth.replace(/-/g, ''))).map((r) => r.stampedAt.slice(0, 10))
+      const marked = Array.from(new Set([...journals, ...notes, ...stamps]))
+      return send(res, 200, { month: yearMonth, marked })
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/v1/threads/') && url.pathname.endsWith('/timeline')) {
+      const threadId = url.pathname.slice('/v1/threads/'.length, -'/timeline'.length)
+      if (!userId) return send(res, 400, { error: 'userId 必填' })
+      const state = manager.get(userId).getState()
+      const thread = state.threads.find((t) => t.id === threadId)
+      if (!thread) return send(res, 404, { error: '线索不存在' })
+      const events = thread.history.map((h) => {
+        const f = state.fragments.find((x) => x.id === h.fragmentId)
+        return { day: h.day, note: h.note, fragment: f ? { id: f.id, title: f.title, body: f.body } : null }
+      })
+      return send(res, 200, { thread, events })
     }
 
     return send(res, 404, { error: 'not found' })

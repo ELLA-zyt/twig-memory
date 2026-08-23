@@ -20,6 +20,12 @@ export interface FragmentCorrection {
   note: string
 }
 
+export interface ContextAnchor {
+  type: string
+  shadowFragmentId: string
+  notePreview: string
+}
+
 export interface Fragment {
   id: FragmentId
   day: number          // 距今天数，0 = 今天
@@ -30,6 +36,11 @@ export interface Fragment {
   threadIds: string[]  // 关联线索
   tags: string[]       // 情境标签（碰撞时分池物理隔离）
   correction?: FragmentCorrection
+  /** 影子碎片：来自情感层（便签/印章），不污染编织层 */
+  shadow?: boolean
+  source?: 'note' | 'stamp' | string
+  noteId?: string
+  contextAnchor?: ContextAnchor
 }
 
 /* ---------------- 线索层（general events / 草蛇灰线系统） ---------------- */

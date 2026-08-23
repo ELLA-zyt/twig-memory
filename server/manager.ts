@@ -5,6 +5,7 @@
  */
 import { HeadlessMuninn, type MuninnState } from './core'
 import { JsonStore } from './store'
+import { loadStamps } from './services/stamps'
 
 export class EngineManager {
   private engines = new Map<string, HeadlessMuninn>()
@@ -16,6 +17,8 @@ export class EngineManager {
     let e = this.engines.get(userId)
     if (!e) {
       e = new HeadlessMuninn(this.store.load(userId))
+      // 注入情感层印章状态，让 getContextPacket 可返回 recentStamps
+      e.setStamps(loadStamps(userId))
       this.engines.set(userId, e)
     }
     return e

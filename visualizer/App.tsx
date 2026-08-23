@@ -10,6 +10,9 @@ import OverviewPage from './pages/OverviewPage'
 import RightsPage from './pages/RightsPage'
 import ThreadsPage from './pages/ThreadsPage'
 import UnderstandingPage from './pages/UnderstandingPage'
+import TodayPage from './pages/TodayPage'
+import BookPage from './pages/BookPage'
+import ClaimsPage from './pages/ClaimsPage'
 import { EngineProvider } from './state/EngineContext'
 
 export default function App() {
@@ -19,7 +22,10 @@ export default function App() {
         <TooltipProvider delayDuration={300}>
           <Routes>
             <Route element={<AppLayout />}>
-              <Route index element={<OverviewPage />} />
+              <Route index element={<TodayPage />} />
+              <Route path="overview" element={<OverviewPage />} />
+              <Route path="book" element={<BookPage />} />
+              <Route path="claims" element={<ClaimsPage />} />
               <Route path="threads" element={<ThreadsPage />} />
               <Route path="understanding" element={<UnderstandingPage />} />
               <Route path="fragments" element={<FragmentsPage />} />

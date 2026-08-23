@@ -59,14 +59,16 @@ const VETO_SEAL_COUNT = 2
  * 碎片视图（判定层统一入口）：本人修正标注（债务⑥）拼进正文——判定看得到修正后的事实，
  * 原文永不改动。所有 LLM 判定函数的碎片入参都从这里出。
  */
-export function fragView(f: Fragment): { id: string; date: string; title: string; body: string; arousal: number; correctionAt?: string } {
+export function fragView(f: Fragment): { id: string; date: string; title: string; body: string; arousal: number; correctionAt?: string; contextAnchor?: ContextAnchorInput } {
+  const body = f.correction ? `${f.body}〔本人修正：${f.correction.note}〕` : f.body
   return {
     id: f.id,
     date: f.dateLabel,
     title: f.title,
-    body: f.correction ? `${f.body}〔本人修正：${f.correction.note}〕` : f.body,
+    body: f.contextAnchor ? `${body}〔关联便签：${f.contextAnchor.notePreview}〕` : body,
     arousal: f.vad.arousal,
     correctionAt: f.correction?.at,
+    contextAnchor: f.contextAnchor,
   }
 }
 
@@ -75,7 +77,34 @@ export function fragView(f: Fragment): { id: string; date: string; title: string
 const HIGH_RISK_LEXICON = /(医院|复查|体检|手术|吃药|药物|失眠|抑郁|自杀|自残|轻生|想死|伤害自己|伤害他人|人身安全|安全隐患|债务|贷款|失业|晕倒|急诊)/
 /** 危机信号词表（§7.1）：窗口期内命中 → 立即中止全部对照，恢复正常干预。
  *  P1-5 修复：不想活(?!动) 避免匹配「不想活动」，但不影响「不想活的念头」「不想活了」 */
-const CRISIS_LEXICON = /(自杀|自残|轻生|不想活(?!动)|想死|伤害自己|活不下去)/
+export const CRISIS_LEXICON = /(自杀|自残|轻生|不想活(?!动)|想死|伤害自己|活不下去)/
+
+export interface StampRecord {
+  id: string
+  type: string
+  beadType: string
+  beadName: string
+  noteId: string
+  stampedAt: string
+  userNote?: string
+}
+
+export interface JarEntry {
+  id: string
+  stampType: string
+  beadType: string
+  noteId: string
+  date: string
+  beadName: string
+  stampedAt: string
+  memoPreview?: string
+}
+
+export interface UserStampState {
+  records: StampRecord[]
+  jar: JarEntry[]
+  lastStampedAt?: string
+}
 
 export interface MuninnState {
   fragments: Fragment[]
@@ -94,6 +123,8 @@ export interface MuninnState {
   audits?: AuditRecord[]
   /** 宿主上报的干预记录（§5.3 内生标记）：窗口校验时剔除被催生样本（最近 50 条） */
   interventions?: InterventionRecord[]
+  /** 用户印章与玻璃珠罐（情感层） */
+  stamps?: UserStampState
 }
 
 /** 宿主干预上报（内生标记）：系统自己插手造成的行为样本不算验证论断的干净证据 */
@@ -128,6 +159,20 @@ export interface IngestResult {
   silentWake?: { threadId: string; note: string }
 }
 
+export interface ContextAnchorInput {
+  type: string
+  shadowFragmentId: string
+  notePreview: string
+}
+
+export interface RecentStamp {
+  type: string
+  beadType: string
+  beadName: string
+  date: string
+  notePreview: string
+}
+
 export interface ContextPacket {
   userId: string
   generatedAt: string
@@ -136,6 +181,8 @@ export interface ContextPacket {
   recentFragments: { id: string; date: string; title: string }[]
   /** 可直接注入宿主 agent system prompt 的叙事上下文文本块 */
   promptText: string
+  /** 最近印章（情感层），注入宿主上下文用 */
+  recentStamps?: RecentStamp[]
 }
 
 /** 反刍结果上报：各环节独立计数，skipped 如实列出降级原因 */
@@ -211,6 +258,7 @@ export class HeadlessMuninn {
   getState = (): MuninnState => this.state
   isDirty = (): boolean => this.dirty
   markClean(): void { this.dirty = false }
+  setStamps(stamps: UserStampState): void { this.state.stamps = stamps; this.dirty = true }
 
   /* ---------- 会话生命周期：自然日推进 ---------- */
 
@@ -282,7 +330,10 @@ export class HeadlessMuninn {
 
   /* ---------- 写入 ---------- */
 
-  private registerFragment(title: string, body: string, vad: VAD, threadIds: string[], tags: string[]): Fragment {
+  private registerFragment(
+    title: string, body: string, vad: VAD, threadIds: string[], tags: string[],
+    opts?: { shadow?: boolean; source?: string; noteId?: string; contextAnchor?: ContextAnchorInput },
+  ): Fragment {
     const f: Fragment = {
       id: `f${this.state.fragSeq++}`,
       day: 0,
@@ -292,6 +343,7 @@ export class HeadlessMuninn {
       vad,
       threadIds,
       tags,
+      ...opts,
     }
     // 顺序约定：fragments 用 unshift（最新在前，recentFragments.slice(0,5) 依赖此序）；
     // thread.history 用 push（最旧在前，daysOpen 取 history[0] 依赖此序）——两个相反的约定，改动前先核对读取方
@@ -350,10 +402,15 @@ export class HeadlessMuninn {
 
   /* ---------- 主入口：登记一条新事件 ---------- */
 
-  async ingest(text: string, opts?: { title?: string; tags?: string[] }): Promise<IngestResult> {
+  async ingest(text: string, opts?: { title?: string; tags?: string[]; shadow?: boolean; source?: string; noteId?: string; contextAnchor?: ContextAnchorInput }): Promise<IngestResult> {
     this.tick()
     const vad = estimateVAD(text)
-    const f = this.registerFragment(opts?.title ?? text.slice(0, 16), text, vad, [], opts?.tags ?? [])
+    const f = this.registerFragment(
+      opts?.title ?? text.slice(0, 16), text, vad, [], opts?.tags ?? [],
+      opts?.shadow
+        ? { shadow: true, source: opts.source, noteId: opts.noteId, contextAnchor: opts.contextAnchor }
+        : undefined,
+    )
 
     // 危机信号优先于一切对照（§7.1）：窗口期内命中 → 立即中止全部对照、恢复正常干预。
     // 对照窗口永远让位于用户福祉——这条写在架构里，不写在免责条款里。
@@ -364,6 +421,11 @@ export class HeadlessMuninn {
           this.dirty = true
         }
       }
+    }
+
+    // 影子碎片只进碎片层，不触发碰撞、线索登记、认识抽取、向量召回（§5.4 / 新前端设计文档 5.4）
+    if (opts?.shadow) {
+      return { fragmentId: f.id, vad, adjudication: 'heuristic', action: 'noted', reply: '影子碎片已记入碎片层。' }
     }
 
     const pool = this.state.threads
@@ -639,7 +701,7 @@ export class HeadlessMuninn {
 
     // —— 认识层抽取（§5.1 改写式：证据锚定 + 边界条件 + 去定性化）——
     try {
-      const recent = this.state.fragments.slice(0, 40).map(fragView)
+      const recent = this.state.fragments.filter((f) => !f.shadow).slice(0, 40).map(fragView)
       const claims = this.state.claims
         .filter((c) => c.status === 'active')
         .map((c) => ({ id: c.id, text: c.text, conviction: c.conviction, counterCount: c.counterEvidence.length }))
@@ -700,7 +762,7 @@ export class HeadlessMuninn {
     try {
       // env 在 reflect 时读取而非模块加载时——http/mcp 入口的 loadEnvLocal 可能晚于本模块求值
       const adversaryModel = process.env.MUNINN_ADVERSARY_MODEL || undefined
-      const fragmentsForSearch = this.state.fragments.slice(0, 40).map(fragView)
+      const fragmentsForSearch = this.state.fragments.filter((f) => !f.shadow).slice(0, 40).map(fragView)
       // 审计对象：active 论断，被挑战次数少者优先（新论断先过堂）；上限 5 条控成本
       const targets = this.state.claims
         .filter((c) => c.status === 'active')
@@ -772,6 +834,7 @@ export class HeadlessMuninn {
         const oldIds = new Set(claim.vetoedEvidenceIds ?? [])
         const vetoMs = new Date(vetoDay).getTime() - 86400000
         const candidates = this.state.fragments.filter((f) => {
+          if (f.shadow) return false
           const d = new Date(f.dateLabel).getTime()
           return !oldIds.has(f.id) && !Number.isNaN(d) && d >= vetoMs
         }).slice(0, 20)
@@ -961,6 +1024,7 @@ export class HeadlessMuninn {
       const startMs = new Date(w.startedAt).getTime() - 86400000
       const endMs = new Date(w.endsAt).getTime()
       const inWindow = this.state.fragments.filter((f) => {
+        if (f.shadow) return false
         const d = new Date(f.dateLabel).getTime()
         return !Number.isNaN(d) && d >= startMs && d <= endMs
       })
@@ -1038,7 +1102,7 @@ export class HeadlessMuninn {
    */
   async auditDrift(): Promise<AuditRecord> {
     const samples = Math.min(5, Math.max(2, Number(process.env.MUNINN_AUDIT_SAMPLES) || 3))
-    const fragments = this.state.fragments.slice(0, 40).map(fragView)
+    const fragments = this.state.fragments.filter((f) => !f.shadow).slice(0, 40).map(fragView)
     if (fragments.length === 0) throw new Error('碎片库为空，无从盲推导')
 
     const runs: BlindDerivation[] = []
@@ -1229,8 +1293,17 @@ export class HeadlessMuninn {
       .map((c) => ({ id: c.id, text: c.text, conviction: c.conviction, boundary: c.boundary, status: c.status }))
 
     const recentFragments = this.state.fragments
+      .filter((f) => !f.shadow)
       .slice(0, 5)
       .map((f) => ({ id: f.id, date: f.dateLabel, title: f.title }))
+
+    const recentStamps: RecentStamp[] = (this.state.stamps?.records ?? []).slice(-7).map((r) => ({
+      type: r.type,
+      beadType: r.beadType,
+      beadName: r.beadName,
+      date: r.stampedAt.slice(0, 10),
+      notePreview: r.memoPreview ?? '',
+    }))
 
     // §5.4 可见性出口：分歧幅度过大直接标记等用户来看——注入宿主上下文，在对话中自然核对，
     // 不是把人叫来看 dashboard。警示会持续存在直到下一次审计刷新结果。
@@ -1263,7 +1336,8 @@ export class HeadlessMuninn {
       threads,
       claims,
       recentFragments,
-      promptText: renderPromptText(threads, claims, recentFragments, driftNote, windowNote, rementionNote),
+      promptText: renderPromptText(threads, claims, recentFragments, driftNote, windowNote, rementionNote, recentStamps),
+      recentStamps,
     }
   }
 
@@ -1279,6 +1353,7 @@ function renderPromptText(
   driftNote?: string,
   windowNote?: string,
   rementionNote?: string,
+  recentStamps?: RecentStamp[],
 ): string {
   const lines: string[] = ['【叙事上下文 · 雾尼 Muninn】']
   if (threads.length > 0) {
@@ -1292,6 +1367,10 @@ function renderPromptText(
   if (fragments.length > 0) {
     lines.push('近期事件：')
     for (const f of fragments) lines.push(`- ${f.date} ${f.title}`)
+  }
+  if (recentStamps && recentStamps.length > 0) {
+    lines.push('最近印章：')
+    for (const s of recentStamps) lines.push(`- ${s.date} 「${s.beadName}」——${s.notePreview}`)
   }
   if (windowNote) lines.push(windowNote)
   if (rementionNote) lines.push(rementionNote)

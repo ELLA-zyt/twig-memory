@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import {
-  Bell, BookOpen, EllipsisVertical, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, ShieldCheck,
+  Bell, BookOpen, Calendar, EllipsisVertical, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, ShieldCheck, Sparkles,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -12,9 +12,12 @@ import { TwigMark, VineDivider } from '../components/nouveau'
 import ThemeSwitcher from '../components/ThemeSwitcher'
 
 const NAV = [
-  { to: '/', end: true, label: '总览', en: 'OVERVIEW', Icon: LayoutDashboard },
+  { to: '/', end: true, label: '今日', en: 'TODAY', Icon: Sparkles },
+  { to: '/overview', label: '总览', en: 'OVERVIEW', Icon: LayoutDashboard },
+  { to: '/book', label: '记忆书', en: 'BOOK', Icon: Calendar },
   { to: '/threads', label: '线索层', en: 'THREADS', Icon: GitBranch },
   { to: '/understanding', label: '认识层', en: 'UNDERSTANDING', Icon: BookOpen },
+  { to: '/claims', label: '理解文档', en: 'CLAIMS', Icon: Scale },
   { to: '/fragments', label: '碎片层', en: 'FRAGMENTS', Icon: Puzzle },
   { to: '/evaluation', label: '评测体系', en: 'EVALUATION', Icon: Scale },
   { to: '/rights', label: '用户权利', en: 'USER RIGHTS', Icon: ShieldCheck },

@@ -5,6 +5,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { EngineManager } from './manager'
+import * as Note from './services/notes'
+import * as Stamp from './services/stamps'
+import * as Journal from './services/journal'
+import * as Soliloquy from './services/soliloquy'
+import { isValidStampType } from '../shared/stamps'
 
 export function createMcpServer(manager: EngineManager): McpServer {
   const server = new McpServer({ name: 'muninn-memory', version: '0.1.0' })
@@ -146,6 +151,76 @@ export function createMcpServer(manager: EngineManager): McpServer {
       const ok = manager.get(userId).correctFragment(fragmentId, note)
       manager.persist(userId)
       return { content: [{ type: 'text', text: ok ? '修正标注已追加，原文未改动' : `fragment ${fragmentId} 不存在` }], isError: !ok }
+    },
+  )
+
+  server.registerTool(
+    'memory_note_create',
+    {
+      description: '宿主为用户写入一条新便签（短消息/提醒/问候），旧便签自动归档。',
+      inputSchema: { userId: z.string(), content: z.string() },
+    },
+    async ({ userId, content }) => {
+      return { content: [{ type: 'text', text: JSON.stringify(Note.createNote(userId, content), null, 2) }] }
+    },
+  )
+
+  server.registerTool(
+    'memory_note_respond',
+    {
+      description: '用户对某条便签做出回应，回应内容作为影子碎片进入引擎视野。',
+      inputSchema: { userId: z.string(), noteId: z.string(), text: z.string(), mood: z.string().optional() },
+    },
+    async ({ userId, noteId, text, mood }) => {
+      const note = Note.respondNote(userId, noteId, text, mood, manager.get(userId))
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: JSON.stringify(note, null, 2) }], isError: !note }
+    },
+  )
+
+  server.registerTool(
+    'memory_note_stamp',
+    {
+      description: '用户对某条便签盖印章，AI 回赠一颗玻璃珠并创建影子碎片。',
+      inputSchema: { userId: z.string(), noteId: z.string(), type: z.string() },
+    },
+    async ({ userId, noteId, type }) => {
+      if (!isValidStampType(type)) return { content: [{ type: 'text', text: '无效印章类型' }], isError: true }
+      const n = Note.readNote(userId, noteId)
+      if (!n) return { content: [{ type: 'text', text: '便签不存在' }], isError: true }
+      const result = Stamp.stampNote(userId, noteId, n.content, type, manager.get(userId))
+      n.stamp = { type: result.record.type, beadType: result.record.beadType, beadName: result.jar.beadName, stampedAt: result.record.stampedAt }
+      Note.saveNoteByPath(userId, n)
+      manager.get(userId).setStamps(Stamp.loadStamps(userId))
+      manager.persist(userId)
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+    },
+  )
+
+  server.registerTool(
+    'memory_stamps',
+    {
+      description: '取用户印章记录与玻璃珠罐。',
+      inputSchema: { userId: z.string() },
+    },
+    async ({ userId }) => {
+      return { content: [{ type: 'text', text: JSON.stringify(Stamp.listStamps(userId), null, 2) }] }
+    },
+  )
+
+  server.registerTool(
+    'memory_journal_generate',
+    {
+      description: '触发生成今日日记（由 reflect 调用或手动触发）。',
+      inputSchema: { userId: z.string() },
+    },
+    async ({ userId }) => {
+      const state = manager.get(userId).getState()
+      const summary = state.fragments.slice(0, 10).map((f) => `- ${f.title}`).join('\n')
+      const content = Journal.generateJournal(summary)
+      const date = new Date().toISOString().slice(0, 10)
+      Journal.saveJournal(userId, date, content)
+      return { content: [{ type: 'text', text: JSON.stringify({ date, content }, null, 2) }] }
     },
   )
 
