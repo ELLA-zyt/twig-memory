@@ -15,8 +15,8 @@
  *   npx tsx server/eval-counter.ts --limit 4   # 只跑前 4 例（调试）
  *   npx tsx server/eval-counter.ts --judge     # 追加独立 LLM 盲评（评审只见输入输出）
  */
-import type { Claim } from '../src/engine/types'
-import { moonshotChat, extractJson } from '../src/engine/llm'
+import type { Claim } from '../visualizer/engine/types'
+import { moonshotChat, extractJson } from '../visualizer/engine/llm'
 import { registerNodeTransport } from './llm-node'
 import { HeadlessMuninn, type MuninnState } from './core'
 

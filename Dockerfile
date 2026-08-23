@@ -7,8 +7,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-# 服务端只依赖 src/engine（类型 + LLM 判定函数），不拷贝整个前端
-COPY src/engine ./src/engine
+# 服务端只依赖 visualizer/engine（类型 + LLM 判定函数），不拷贝整个前端
+COPY visualizer/engine ./visualizer/engine
 COPY server ./server
 
 ENV NODE_ENV=production

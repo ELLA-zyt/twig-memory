@@ -10,11 +10,11 @@
  *       LLM 全挂时的降级。
  * 运行：npx tsx server/dev-smoke.ts   —— 不调真实 API，可随意重跑；确认完毕后可删除。
  */
-import { setChatTransport } from '../src/engine/llm'
+import { setChatTransport } from '../visualizer/engine/llm'
 import { HeadlessMuninn, fragView, setEmbedFn, type MuninnState } from './core'
 import { SCENARIOS, scenarioPass, scoreCounterRun } from './eval-counter'
 import { aggregate, buildRetriever, CATEGORY_NAMES, fuseRrf, parseLocoDate, tokenize, topByVector, type Frag } from './eval-locomo'
-import type { Claim } from '../src/engine/types'
+import type { Claim } from '../visualizer/engine/types'
 
 /* ---------------- mock 传输层：按消息全文内容路由预制响应（函数体可状态化） ---------------- */
 

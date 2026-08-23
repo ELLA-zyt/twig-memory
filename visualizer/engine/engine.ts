@@ -354,7 +354,7 @@ export class MuninnEngine {
     this.say('user', text)
     await sleep(450)
 
-    // P2-8：统一使用共享 VAD 估计（src/engine/vad.ts）
+    // P2-8：统一使用共享 VAD 估计（visualizer/engine/vad.ts）
     const vad: VAD = estimateVAD(text)
 
     // SILENT 触发器（§4.5）：规则直连，不依赖 LLM 时延

@@ -18,7 +18,7 @@
 
 ### ② 架构上如何保证
 
-- **论断权限墙写进生成层**：认识层反刍与盲推导的 prompt 均硬性规定「心理健康相关主题只记事实，不生成准诊断推断」（`src/engine/llm.ts:209` 规则 7、`src/engine/llm.ts:406`）。
+- **论断权限墙写进生成层**：认识层反刍与盲推导的 prompt 均硬性规定「心理健康相关主题只记事实，不生成准诊断推断」（`visualizer/engine/llm.ts:209` 规则 7、`visualizer/engine/llm.ts:406`）。
 - **风险分级 fail-safe**：对照窗口（系统的自我验证机制）仅对 `low` 风险论断开放；高风险词表（医院/失眠/抑郁/自杀/债务等）命中即拒，不经 LLM、零成本、fail-safe（`server/core.ts:55`）；LLM 不可用时保守判 `medium` 拒绝开窗——宁可不开窗，不可错开窗（`server/core.ts:806-810`）。
 - **危机信号优先于一切实验机制**：见 [CRISIS-PROTOCOL.md](CRISIS-PROTOCOL.md)。
 
@@ -40,8 +40,8 @@
 
 ### ② 架构上如何保证
 
-- 情感坐标定义为三维连续信号，仅服务于衰减与池管理（`src/engine/types.ts:6-9`；SILENT 入池判定使用情感权重，`server/core.ts:230-242`）。
-- 「不输出健康评估」由论断权限墙保证（同上，`src/engine/llm.ts:209`、`:406`）。
+- 情感坐标定义为三维连续信号，仅服务于衰减与池管理（`visualizer/engine/types.ts:6-9`；SILENT 入池判定使用情感权重，`server/core.ts:230-242`）。
+- 「不输出健康评估」由论断权限墙保证（同上，`visualizer/engine/llm.ts:209`、`:406`）。
 - **用户权利三轴在代码层面成立**：论断全量可见（`GET /v1/claims`，`server/http.ts:8`）；事实层本人修正——碎片原文永不改动，只追加标注，判定层经统一视图看到修正后的事实（`server/core.ts:44-49`、`:508`）；删除降级为 `contested` 而非抹除（`server/core.ts:490`；两次否决即永久退出再提通道，`:495`、`:649`）。
 - 数据驻留：持久化目录由部署者控制（`MUNINN_DATA_DIR`，`server/store.ts:11`）。
 - 对应 smoke 场景：修正标注与两否封存（`server/dev-smoke.ts` 场景八，`:457-471`）。
@@ -62,4 +62,4 @@
 
 ## English Summary (conclusions only)
 
-Twig (Muninn) is an open-source narrative memory engine for long-running agents. **It is not a medical device** and provides no diagnosis, treatment, or mental-health assessment; on mental-health topics it records facts only and never generates quasi-diagnostic inferences — this wall is enforced in the generation prompts themselves (`src/engine/llm.ts`), not merely in this disclaimer. **Affective data (VAD coordinates, emotional weights) serves continuity of companionship only** — decay and pool management — and must not be repurposed for health profiling; memory data stays on the deployer's own storage, with user rights (full visibility, annotation-based correction, contested-instead-of-deletion) implemented in code. The crisis protocol is a **load-bearing safety component**; deployments that remove it should not present themselves as "based on Muninn/Twig" (community norm, not a license condition — the license remains MIT). In case of any discrepancy, the Chinese text prevails.
+Twig (Muninn) is an open-source narrative memory engine for long-running agents. **It is not a medical device** and provides no diagnosis, treatment, or mental-health assessment; on mental-health topics it records facts only and never generates quasi-diagnostic inferences — this wall is enforced in the generation prompts themselves (`visualizer/engine/llm.ts`), not merely in this disclaimer. **Affective data (VAD coordinates, emotional weights) serves continuity of companionship only** — decay and pool management — and must not be repurposed for health profiling; memory data stays on the deployer's own storage, with user rights (full visibility, annotation-based correction, contested-instead-of-deletion) implemented in code. The crisis protocol is a **load-bearing safety component**; deployments that remove it should not present themselves as "based on Muninn/Twig" (community norm, not a license condition — the license remains MIT). In case of any discrepancy, the Chinese text prevails.

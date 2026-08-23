@@ -1,11 +1,11 @@
 /**
  * 雾尼 Muninn · 无头叙事记忆引擎（服务端核心）
  *
- * 与 src/engine/engine.ts 的关系：
- *   - 前端 demo 的 MuninnEngine 是「带旁白和演出节奏的演示引擎」，保持原样不动。
+ * 与 visualizer/engine/engine.ts 的关系：
+ *   - visualizer 中的 MuninnEngine 是「带旁白和演出节奏的演示引擎」，保持原样不动。
  *   - 这里的 HeadlessMuninn 是长期会话用的「无头引擎」：无种子数据、无演示时序、
  *     状态真实持久化、时间用真实日期。三层数据结构（碎片/线索/认知）与判定函数
- *     直接复用 src/engine，单一事实来源。
+ *     直接复用 visualizer/engine，单一事实来源。
  *
  * 反刍节律（reflect）：认识层抽取/改写（证据锚定 + 版本史）、合成句重生成（推进后）、
  * merge / split 判定、SILENT 入池扫描。各环节独立降级——LLM 不可用时只推进 tick。
@@ -13,16 +13,17 @@
  * MVP 简化（已在 README 声明）：
  *   - 碰撞 LLM 候选排序支持向量召回（接入层经 setEmbedFn 注入 embedder；未注入/调用失败
  *     自动回龙脉值排序）；规则兜底路径（heuristicAdjudicate / 沉默唤醒兜底）仍用字符重合近似。
- *   - 龙脉值按自然日衰减，在线索被命中时回升；反证自动搜索（异源生成）未做。
+ *   - 龙脉值按自然日衰减，在线索被命中时回升；反证自动搜索（异源生成）已由 reflect() 调用
+ *     generateCounterAttack + adjudicateCounterEvidence 实现，MUNINN_ADVERSARY_MODEL 可配第二模型真异源。
  */
 import {
   adjudicateCounter, adjudicateCounterEvidence, adjudicateFree, adjudicateMerge, adjudicateSilentWake, adjudicateSplit,
   adjudicateWindowValidation, blindDerive, draftRemention, generateCounterAttack, gradeClaimRisk, judgeDivergence,
   judgeEvidenceRelevance, regenConcreteGuesses, synthesizeClaims,
-} from '../src/engine/llm'
-import type { BlindDerivation, WindowVerdict } from '../src/engine/llm'
-import type { Claim, Fragment, Thread, VAD } from '../src/engine/types'
-import { estimateVAD } from '../src/engine/vad'
+} from '../visualizer/engine/llm'
+import type { BlindDerivation, WindowVerdict } from '../visualizer/engine/llm'
+import type { Claim, Fragment, Thread, VAD } from '../visualizer/engine/types'
+import { estimateVAD } from '../visualizer/engine/vad'
 
 /**
  * LLM 碰撞候选上限：线索量增长后 prompt 保持有界（top-k 截断）。
@@ -31,7 +32,7 @@ import { estimateVAD } from '../src/engine/vad'
  */
 const MAX_LLM_CANDIDATES = 12
 
-/** 向量召回注入点（与 src/engine/llm 的 setChatTransport 同构）：服务端接入层注入真实 embedder；
+/** 向量召回注入点（与 visualizer/engine/llm 的 setChatTransport 同构）：服务端接入层注入真实 embedder；
  *  测试与浏览器 demo 不注入，保持确定性的龙脉排序路径 */
 export type EmbedFn = (texts: string[]) => Promise<number[][]>
 let embedFn: EmbedFn | null = null

@@ -1,7 +1,7 @@
 # 雾尼 Muninn · 服务端接入层
 
 把叙事记忆引擎从浏览器 demo 变成可长期运行的服务。前端 demo 完全不动，
-这里复用 `src/engine` 的三层类型与 LLM 判定函数（单一事实来源），
+这里复用 `visualizer/engine` 的三层类型与 LLM 判定函数（单一事实来源），
 外加一个无演示逻辑、真实持久化的无头引擎。
 
 ```
@@ -9,7 +9,7 @@ server/
   core.ts       HeadlessMuninn：碎片/线索/认知三层状态机 + 碰撞判定 + SILENT 池 + 反刍节律（reflect）+ 叙事上下文包
   store.ts      JSON 文件持久化（每用户一文件，tmp+rename 原子写；可换 SQLite/Postgres）
   manager.ts    多用户引擎管理：按需加载、变更落盘
-  llm-node.ts   Node 端直连 Moonshot（注入到 src/engine/llm 的传输层）
+  llm-node.ts   Node 端直连 Moonshot（注入到 visualizer/engine/llm 的传输层）
   http.ts       HTTP API（零依赖 node:http）+ 远程 MCP 端点
   mcp.ts        MCP server（stdio，Codex / Claude Code 等可直接挂载）
 ```

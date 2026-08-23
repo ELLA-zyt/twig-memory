@@ -17,9 +17,9 @@
   - 反转 verdict 降低关联论断置信（与“推进”区分）
   - split 合成句重新生成、审计全配对
   - 邀请过期、反转标记、`claimsUnchecked`、`fragView` 时间戳
-  - `extractJson` 增加平衡括号扫描器（`src/engine/llm.ts`）
+  - `extractJson` 增加平衡括号扫描器（`visualizer/engine/llm.ts`）
 - **VAD 共享层**
-  - 新建 `src/engine/vad.ts`，`core.ts` 与 `engine.ts` 共用同一套 VAD 估计
+  - 新建 `visualizer/engine/vad.ts`，`core.ts` 与 `engine.ts` 共用同一套 VAD 估计
 
 ### UI / shadcn 组件接入
 - `Dialog`：`ImportOverlay` / `ClosureOverlay` 全屏叙事浮层，支持 ESC 关闭、焦点陷阱、ARIA

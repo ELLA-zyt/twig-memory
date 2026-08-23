@@ -27,7 +27,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { moonshotChat, extractJson } from '../src/engine/llm'
+import { moonshotChat, extractJson } from '../visualizer/engine/llm'
 import { registerNodeTransport } from './llm-node'
 import { embedTexts, embeddingsAvailable } from './embed-node'
 

@@ -11,7 +11,7 @@
  * P0-2 修复：危机词表预扫在 LLM 回复生成之前——命中危机信号时先注入安全阀指令，
  * 再生成回复，而非事后 ingest 才发现危机（原顺序：reply → ingest → 危机检测，太晚）。
  */
-import { moonshotChat } from '../src/engine/llm'
+import { moonshotChat } from '../visualizer/engine/llm'
 import type { EngineManager } from './manager'
 import type { ContextPacket, IngestResult } from './core'
 import { CRISIS_LEXICON } from './core'

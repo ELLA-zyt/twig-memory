@@ -1,10 +1,10 @@
 /**
  * Node 端 LLM 传输层：直连 Moonshot API，密钥从环境变量读取。
- * 通过 setChatTransport 注入后，src/engine/llm.ts 里的全部判定函数
+ * 通过 setChatTransport 注入后，visualizer/engine/llm.ts 里的全部判定函数
  * （adjudicateFree / adjudicateClosure / adjudicateCounter）即自动走直连，
  * 前端浏览器路径（vite 代理）不受影响。
  */
-import { setChatTransport } from '../src/engine/llm'
+import { setChatTransport } from '../visualizer/engine/llm'
 import { readFileSync } from 'node:fs'
 
 /** 零依赖读取项目根目录 .env.local（与前端 vite 共用同一份密钥文件） */

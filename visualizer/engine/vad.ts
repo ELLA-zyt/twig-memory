@@ -1,6 +1,6 @@
 /**
  * 共享 VAD 估计（P2-8 修复：demo 与 server 不再各写一份词表）
- * 被 src/engine/engine.ts（demo）与 server/core.ts（无头引擎）共同引用。
+ * 被 visualizer/engine/engine.ts（demo）与 server/core.ts（无头引擎）共同引用。
  * 后续可替换为 LLM 打分，接口不变。
  */
 import type { VAD } from './types'
