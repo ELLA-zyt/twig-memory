@@ -1297,12 +1297,12 @@ export class HeadlessMuninn {
       .slice(0, 5)
       .map((f) => ({ id: f.id, date: f.dateLabel, title: f.title }))
 
-    const recentStamps: RecentStamp[] = (this.state.stamps?.records ?? []).slice(-7).map((r) => ({
-      type: r.type,
-      beadType: r.beadType,
-      beadName: r.beadName,
-      date: r.stampedAt.slice(0, 10),
-      notePreview: r.memoPreview ?? '',
+    const recentStamps: RecentStamp[] = (this.state.stamps?.jar ?? []).slice(-7).map((j) => ({
+      type: j.stampType,
+      beadType: j.beadType,
+      beadName: j.beadName,
+      date: j.date,
+      notePreview: j.memoPreview ?? '',
     }))
 
     // §5.4 可见性出口：分歧幅度过大直接标记等用户来看——注入宿主上下文，在对话中自然核对，
