@@ -13,6 +13,9 @@ import UnderstandingPage from './pages/UnderstandingPage'
 import TodayPage from './pages/TodayPage'
 import BookPage from './pages/BookPage'
 import ClaimsPage from './pages/ClaimsPage'
+import ThreadDetailPage from './pages/ThreadDetailPage'
+import AuditPage from './pages/AuditPage'
+import SettingsPage from './pages/SettingsPage'
 import { EngineProvider } from './state/EngineContext'
 
 export default function App() {
@@ -27,6 +30,9 @@ export default function App() {
               <Route path="book" element={<BookPage />} />
               <Route path="claims" element={<ClaimsPage />} />
               <Route path="threads" element={<ThreadsPage />} />
+              <Route path="threads/:id" element={<ThreadDetailPage />} />
+              <Route path="audit" element={<AuditPage />} />
+              <Route path="settings" element={<SettingsPage />} />
               <Route path="understanding" element={<UnderstandingPage />} />
               <Route path="fragments" element={<FragmentsPage />} />
               <Route path="evaluation" element={<EvaluationPage />} />

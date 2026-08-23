@@ -124,3 +124,45 @@ export function calendarMarks(month?: string, userId = USER_ID): Promise<{ month
   const qs = month ? `&month=${month}` : ''
   return fetchJson(`${API_BASE}/v1/calendar?userId=${encodeURIComponent(userId)}${qs}`)
 }
+
+export interface Thread {
+  id: string
+  label: string
+  openQuestion: string
+  pool: string
+  status: string
+  dragonVein: number
+  history: { day: number; fragmentId: string; note: string }[]
+}
+
+export interface MuninnState {
+  fragments: { id: string; dateLabel: string; title: string; body: string }[]
+  threads: Thread[]
+  claims: Claim[]
+}
+
+export function getState(userId = USER_ID): Promise<MuninnState> {
+  return fetchJson(`${API_BASE}/v1/state?userId=${encodeURIComponent(userId)}`)
+}
+
+export function getClaims(userId = USER_ID): Promise<Claim[]> {
+  return fetchJson(`${API_BASE}/v1/claims?userId=${encodeURIComponent(userId)}`)
+}
+
+export function getThreadTimeline(threadId: string, userId = USER_ID): Promise<{ thread: Thread; events: unknown[] }> {
+  return fetchJson(`${API_BASE}/v1/threads/${threadId}/timeline?userId=${encodeURIComponent(userId)}`)
+}
+
+export function reflect(userId = USER_ID): Promise<unknown> {
+  return fetchJson(`${API_BASE}/v1/reflect`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}
+
+export function audit(userId = USER_ID): Promise<unknown> {
+  return fetchJson(`${API_BASE}/v1/audit`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+}

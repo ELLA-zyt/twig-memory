@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import {
-  Bell, BookOpen, Calendar, EllipsisVertical, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, ShieldCheck, Sparkles,
+  Bell, BookOpen, Calendar, EllipsisVertical, GitBranch, LayoutDashboard, Play, Puzzle, RefreshCw, Scale, Search, Settings, ShieldCheck, Sparkles,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -19,9 +19,11 @@ const NAV = [
   { to: '/understanding', label: '认识层', en: 'UNDERSTANDING', Icon: BookOpen },
   { to: '/claims', label: '理解文档', en: 'CLAIMS', Icon: Scale },
   { to: '/fragments', label: '碎片层', en: 'FRAGMENTS', Icon: Puzzle },
+  { to: '/audit', label: '自检日志', en: 'AUDIT', Icon: RefreshCw },
   { to: '/evaluation', label: '评测体系', en: 'EVALUATION', Icon: Scale },
   { to: '/rights', label: '用户权利', en: 'USER RIGHTS', Icon: ShieldCheck },
   { to: '/demo', label: '现场演示', en: 'LIVE DEMO', Icon: Play },
+  { to: '/settings', label: '设置', en: 'SETTINGS', Icon: Settings },
 ]
 
 function GlobalSearch() {
