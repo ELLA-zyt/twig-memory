@@ -119,7 +119,7 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 ```
 twig-memory/
 ├── server/        # 核心引擎 + HTTP API + MCP server
-├── visualizer/    # 观测面板（原前端 demo，用于调试和可视化记忆状态）
+├── visualizer/    # 新前端（记忆书）：今日、记忆书、理解文档、设置
 ├── docs/          # 技术设计文档、合规声明、危机协议
 ├── README.md      # 你正在看的
 └── package.json

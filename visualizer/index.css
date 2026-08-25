@@ -257,7 +257,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Noto Serif SC", "Songti SC", "STSong", "STKaiti", KaiTi, "Noto Sans SC", serif;
+    font-family: "Noto Serif SC", "Songti SC", "STSong", "STKaiti", KaiTi, "Microsoft YaHei", "SimSun", "Noto Sans SC", serif;
     font-feature-settings: "tnum";
     /* 羊皮纸肌理：细颗粒 + 纸面晕 */
     background-image:
@@ -530,4 +530,122 @@
 }
 .nv-meter-gold > div {
   background: linear-gradient(90deg, hsl(var(--gold) / 0.75), hsl(var(--gold)));
+}
+
+/* ===== 印章仪式动画 ===== */
+@keyframes stampInspectFlip {
+  0% { transform: scale(0.55) rotateY(0deg); }
+  28% { transform: scale(1.12) rotateY(360deg); }
+  52% { transform: scale(1.12) rotateY(720deg); }
+  72% { transform: scale(1.06) rotateY(720deg); }
+  100% { transform: scale(1.0) rotateY(720deg); }
+}
+
+.stamp-inspect {
+  animation: stampInspectFlip 2.4s cubic-bezier(0.45, 0, 0.55, 1) forwards;
+}
+
+@keyframes beadFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+.bead-float {
+  animation: beadFloat 3s ease-in-out infinite;
+}
+
+@keyframes rippleOut {
+  0% { width: 0; height: 0; opacity: 0.6; }
+  100% { width: 200px; height: 200px; opacity: 0; }
+}
+
+.ripple-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(139, 119, 101, 0.15);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.ripple-ring.active {
+  animation: rippleOut 1.2s ease-out forwards;
+}
+
+@keyframes cardShake {
+  0%, 100% { transform: rotate(-0.6deg); }
+  10% { transform: translate(-3px, 2px) rotate(-0.6deg); }
+  20% { transform: translate(3px, -2px) rotate(-0.6deg); }
+  30% { transform: translate(-2px, -1px) rotate(-0.6deg); }
+  40% { transform: translate(2px, 1px) rotate(-0.6deg); }
+  50% { transform: translate(-1px, 2px) rotate(-0.6deg); }
+  60% { transform: translate(1px, -2px) rotate(-0.6deg); }
+  70% { transform: translate(-1px, -1px) rotate(-0.6deg); }
+  80% { transform: translate(1px, 1px) rotate(-0.6deg); }
+}
+
+.memo-card-shake {
+  animation: cardShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* ===== 印章坠落动画 ===== */
+.falling-seal {
+  left: var(--start-x);
+  top: var(--start-y);
+  transform: translate(-50%, -50%) scale(1.0) rotateY(720deg) rotateZ(-5deg);
+  transform-style: preserve-3d;
+}
+
+.falling-seal.dropping {
+  animation: sealDrop 0.65s cubic-bezier(0.55, 0.06, 0.75, 0.6) forwards;
+}
+
+@keyframes sealDrop {
+  0% {
+    left: var(--start-x);
+    top: var(--start-y);
+    transform: translate(-50%, -50%) scale(1.0) rotateY(720deg) rotateZ(-5deg);
+  }
+  40% {
+    left: var(--target-x);
+    top: var(--target-y);
+    transform: translate(-50%, -50%) scale(0.26) rotateY(720deg) rotateZ(-8deg);
+  }
+  55% {
+    left: var(--target-x);
+    top: var(--target-y);
+    transform: translate(-50%, -50%) scale(0.28) rotateY(720deg) rotateZ(-6deg);
+  }
+  70% {
+    left: var(--target-x);
+    top: var(--target-y);
+    transform: translate(-50%, -50%) scale(0.255) rotateY(720deg) rotateZ(-7deg);
+  }
+  85% {
+    left: var(--target-x);
+    top: var(--target-y);
+    transform: translate(-50%, -50%) scale(0.265) rotateY(720deg) rotateZ(-6.5deg);
+  }
+  100% {
+    left: var(--target-x);
+    top: var(--target-y);
+    transform: translate(-50%, -50%) scale(0.26) rotateY(720deg) rotateZ(-7deg);
+  }
+}
+
+/* 压痕扫光 */
+.imprint-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: rimSweep 1.2s ease-out forwards;
+  border-radius: 50%;
+}
+
+@keyframes rimSweep {
+  to { left: 200%; }
 }

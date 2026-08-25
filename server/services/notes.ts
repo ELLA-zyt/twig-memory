@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HeadlessMuninn } from '../core'
+import type { StampType } from '../../shared/stamps'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = process.env.MUNINN_DATA_DIR || join(__dirname, '..', 'data')
@@ -71,8 +72,23 @@ function saveNote(note: Note): void {
   writeFileSync(path, JSON.stringify(note, null, 2), 'utf8')
 }
 
+const TZ = process.env.MUNINN_TZ || 'Asia/Shanghai'
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Date().toLocaleDateString('sv-SE', { timeZone: TZ })
+}
+
+function yesterdayStr(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toLocaleDateString('sv-SE', { timeZone: TZ })
+}
+
+export function shouldPopup(note: Note | null): boolean {
+  if (!note || note.status !== 'unread') return false
+  const hour = new Date().getHours()
+  if (hour >= 23) return true
+  if (hour < 6 && note.date === yesterdayStr()) return true
+  return false
 }
 
 export function currentNote(userId: string): Note | null {
@@ -151,11 +167,11 @@ export function respondNote(userId: string, noteId: string, text: string, mood?:
   note.response = { text, mood, at: new Date().toISOString() }
   note.status = 'responded'
   note.updatedAt = new Date().toISOString()
-  saveNoteByPath(userId, note)
 
   // 创建影子碎片，让引擎看到用户回应
   if (engine) {
     const shadowId = `sf-${note.id}`
+    note.shadowFragmentId = shadowId
     engine.ingest(text, {
       title: `回应便签：${note.content.slice(0, 16)}`,
       shadow: true,
@@ -168,5 +184,7 @@ export function respondNote(userId: string, noteId: string, text: string, mood?:
       },
     }).catch(() => { /* engine 内部已持久化由 manager 负责 */ })
   }
+
+  saveNoteByPath(userId, note)
   return note
 }

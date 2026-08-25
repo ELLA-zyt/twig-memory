@@ -18,12 +18,14 @@
  */
 import {
   adjudicateCounter, adjudicateCounterEvidence, adjudicateFree, adjudicateMerge, adjudicateSilentWake, adjudicateSplit,
-  adjudicateWindowValidation, blindDerive, draftRemention, generateCounterAttack, gradeClaimRisk, judgeDivergence,
+  adjudicateWindowValidation, blindDerive, draftRemention, generateCounterAttack, generateJournalDraft, generateSoliloquyDraft, gradeClaimRisk, judgeDivergence,
   judgeEvidenceRelevance, regenConcreteGuesses, synthesizeClaims,
 } from '../visualizer/engine/llm'
 import type { BlindDerivation, WindowVerdict } from '../visualizer/engine/llm'
 import type { Claim, Fragment, Thread, VAD } from '../visualizer/engine/types'
 import { estimateVAD } from '../visualizer/engine/vad'
+import { saveJournal } from './services/journal'
+import { saveSoliloquy } from './services/soliloquy'
 
 /**
  * LLM 碰撞候选上限：线索量增长后 prompt 保持有界（top-k 截断）。
@@ -687,7 +689,7 @@ export class HeadlessMuninn {
    * 顺序：tick（衰减 + SILENT 入池）→ 认识层抽取 → 合成句重生成 → merge → split。
    * 每个环节独立 try/catch 降级，LLM 不可用时如实上报 skipped，不做任何结构改动。
    */
-  async reflect(): Promise<ReflectResult> {
+  async reflect(userId?: string): Promise<ReflectResult> {
     const out: ReflectResult = {
       ranAt: new Date().toISOString(),
       claimsCreated: 0, claimsRewritten: 0,
@@ -956,6 +958,35 @@ export class HeadlessMuninn {
         out.driftAudit = await this.auditDrift()
       } catch {
         out.skipped.push('audit: LLM 不可用或样本不足')
+      }
+    }
+
+    // —— 日记 + 心迹生成（新前端情感层）：反刍主流程后触发，失败不污染 reflect 结果 ——
+    if (userId) {
+      try {
+        const today = todayStr()
+        const fragmentsForNarrative = this.state.fragments
+          .filter((f) => f.dateLabel === today)
+          .map((f) => ({ title: f.title, body: f.body }))
+        const activeThreads = this.state.threads
+          .filter((t) => t.status === 'unresolved' && t.pool !== 'SILENT')
+          .map((t) => ({ label: t.label, openQuestion: t.openQuestion }))
+
+        try {
+          const journal = await generateJournalDraft(fragmentsForNarrative, activeThreads)
+          if (journal?.content) saveJournal(userId, today, `# 日记 · ${today}\n\n${journal.content}`)
+        } catch (err) {
+          console.error('[reflect journal error]', err)
+        }
+
+        try {
+          const soliloquy = await generateSoliloquyDraft(fragmentsForNarrative)
+          if (soliloquy) saveSoliloquy(userId, today, `# 心迹 · ${today}\n\n${soliloquy}`)
+        } catch (err) {
+          console.error('[reflect soliloquy error]', err)
+        }
+      } catch {
+        // 日记/心迹失败不阻塞反刍主流程
       }
     }
 

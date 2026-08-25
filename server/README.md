@@ -1,8 +1,8 @@
 # 雾尼 Muninn · 服务端接入层
 
-把叙事记忆引擎从浏览器 demo 变成可长期运行的服务。前端 demo 完全不动，
-这里复用 `visualizer/engine` 的三层类型与 LLM 判定函数（单一事实来源），
-外加一个无演示逻辑、真实持久化的无头引擎。
+把叙事记忆引擎从浏览器 demo 变成可长期运行的服务。旧 demo 页面已从仓库移除，
+存档于 `D:/kimi/workspace/muninn-old-demo`。这里复用 `server/core.ts` 中的无头引擎与 LLM 判定函数（单一事实来源），
+外加真实持久化的 HTTP/MCP 服务。
 
 ```
 server/

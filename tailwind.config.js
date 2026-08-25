@@ -72,8 +72,8 @@ module.exports = {
         },
       },
       fontFamily: {
-        display: ['"Cormorant Garamond"', '"Noto Serif SC"', '"STKaiti"', '"Kaiti SC"', 'KaiTi', '"Songti SC"', 'serif'],
-        body: ['"Noto Serif SC"', '"Songti SC"', '"STSong"', '"STKaiti"', 'KaiTi', '"Noto Sans SC"', 'serif'],
+        display: ['"Cormorant Garamond"', '"Noto Serif SC"', '"STKaiti"', '"Kaiti SC"', 'KaiTi', '"Songti SC"', '"Microsoft YaHei"', '"SimSun"', 'serif'],
+        body: ['"Noto Serif SC"', '"Songti SC"', '"STSong"', '"STKaiti"', 'KaiTi', '"Microsoft YaHei"', '"SimSun"', '"Noto Sans SC"', 'serif'],
         mono: ['ui-monospace', '"Cascadia Mono"', '"JetBrains Mono"', 'Consolas', 'monospace'],
       },
       borderRadius: {

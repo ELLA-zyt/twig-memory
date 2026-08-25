@@ -69,8 +69,8 @@ export async function chatTurn(manager: EngineManager, userId: string, text: str
 
   // 自动记忆：用户原话直灌碎片层（零提取失真；高质量提取发生在反刍的认识层，带证据锚定）
   // ingest 内部也会做 CRISIS_LEXICON 检测 → 中止对照窗口，这里不重复
-  const ingest = await engine.ingest(text)
-  manager.persist(userId)
-  histories.set(userId, [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }].slice(-MAX_HISTORY))
+  // withLock 确保 chat 与 reflect/ingest 走同一 per-user 串行锁链，成功时自动持久化
+  const ingest = await manager.withLock(userId, (e) => e.ingest(text))
+  histories.set(userId, [...history, { role: 'user' as const, content: text }, { role: 'assistant' as const, content: reply }].slice(-MAX_HISTORY))
   return { reply, contextInjected: packet, ingest, crisisDetected }
 }

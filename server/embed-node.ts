@@ -128,7 +128,7 @@ async function embedBatch(texts: string[], model: string, baseUrl: string, apiKe
         const body = await resp.text().catch(() => '')
         throw new Error(`HTTP ${resp.status}: ${body.slice(0, 300)}`)
       }
-      const data = await resp.json()
+      const data: any = await resp.json()
       const rows = data?.data
       if (!Array.isArray(rows) || rows.length !== texts.length) throw new Error('嵌入响应条数不符')
       // OpenAI 兼容返回按 index 排序对齐输入

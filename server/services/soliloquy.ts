@@ -2,7 +2,7 @@
  * 心迹服务 SoliloquyService
  * 路径：server/data/soliloquy/{userId}/{YYYY-MM-DD}.md
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -32,6 +32,19 @@ export function getSoliloquy(userId: string, date: string): string | null {
   }
 }
 
+/** 文档对齐版：返回 { content, hasContent, generatedAt } */
+export function getSoliloquyMeta(userId: string, date: string): { content: string | null; hasContent: boolean; generatedAt: string | null } {
+  const path = filePath(userId, date)
+  if (!existsSync(path)) return { content: null, hasContent: false, generatedAt: null }
+  try {
+    const content = readFileSync(path, 'utf8')
+    const generatedAt = statSync(path).mtime.toISOString()
+    return { content, hasContent: content.trim().length > 0, generatedAt }
+  } catch {
+    return { content: null, hasContent: false, generatedAt: null }
+  }
+}
+
 export function listSoliloquy(userId: string): { date: string; preview: string }[] {
   const dir = soliloquyDir(userId)
   if (!existsSync(dir)) return []
@@ -51,7 +64,19 @@ export function saveSoliloquy(userId: string, date: string, content: string): vo
   writeFileSync(filePath(userId, date), content, 'utf8')
 }
 
+const TZ = process.env.MUNINN_TZ || 'Asia/Shanghai'
+function todayStr(): string { return new Date().toLocaleDateString('sv-SE', { timeZone: TZ }) }
+
 export function generateSoliloquy(engineText?: string): string {
-  const now = new Date().toISOString()
-  return `# 心迹 · ${now.slice(0, 10)}\n\n（由反刍流程触发，TODO 接入 LLM 生成）\n\n${engineText ? `引擎摘要：\n${engineText}` : ''}`
+  const date = todayStr()
+  return `# 心迹 · ${date}\n\n（由反刍流程触发，TODO 接入 LLM 生成）\n\n${engineText ? `引擎摘要：\n${engineText}` : ''}`
+}
+
+export function exportSoliloquies(userId: string): { date: string; content: string }[] {
+  const dir = soliloquyDir(userId)
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()
+    .map((f) => ({ date: f.replace(/\.md$/, ''), content: readFileSync(join(dir, f), 'utf8') }))
 }

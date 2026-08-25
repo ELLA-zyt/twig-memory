@@ -33,6 +33,7 @@ export interface Note {
     userNote?: string
   }
   response?: { text: string; mood?: string; at: string }
+  shadowFragmentId?: string
   createdAt: string
   updatedAt: string
 }
@@ -51,7 +52,7 @@ export interface StampResult {
   bead: { id: string; name: string; color: string; texture: string; whisper: string; source: string }
 }
 
-export function currentNote(userId = USER_ID): Promise<{ note: Note | null }> {
+export function currentNote(userId = USER_ID): Promise<{ note: Note | null; shouldPopup: boolean }> {
   return fetchJson(`${API_BASE}/v1/notes/current?userId=${encodeURIComponent(userId)}`)
 }
 
@@ -66,8 +67,16 @@ export function createNote(content: string, userId = USER_ID): Promise<Note> {
   })
 }
 
+/** 便签生成：由宿主 LLM 基于今日碎片与线索产出，不再需要用户手动输入 */
+export function generateNote(userId = USER_ID, date?: string): Promise<Note> {
+  return fetchJson(`${API_BASE}/v1/notes/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, date }),
+  })
+}
+
 export function readNote(noteId: string, userId = USER_ID): Promise<{ note: Note | null }> {
-  return fetchJson(`${API_BASE}/v1/notes/current?userId=${encodeURIComponent(userId)}`)
+  return fetchJson(`${API_BASE}/v1/notes/${encodeURIComponent(noteId)}?userId=${encodeURIComponent(userId)}`)
 }
 
 export function markRead(noteId: string, userId = USER_ID): Promise<{ note: Note | null }> {
@@ -99,19 +108,26 @@ export function recentStamps(limit = 7, userId = USER_ID): Promise<{ recent: unk
   return fetchJson(`${API_BASE}/v1/stamps/recent?userId=${encodeURIComponent(userId)}&limit=${limit}`)
 }
 
-export function getJournal(date?: string, userId = USER_ID): Promise<{ date: string; content: string }> {
+export interface ContentMeta {
+  date: string
+  content: string | null
+  hasContent: boolean
+  generatedAt: string | null
+}
+
+export function getJournal(date?: string, userId = USER_ID): Promise<ContentMeta> {
   const qs = date ? `&date=${date}` : ''
   return fetchJson(`${API_BASE}/v1/journal?userId=${encodeURIComponent(userId)}${qs}`)
 }
 
-export function generateJournal(userId = USER_ID): Promise<{ date: string; content: string }> {
+export function generateJournal(userId = USER_ID, date?: string): Promise<ContentMeta> {
   return fetchJson(`${API_BASE}/v1/journal/generate`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, date }),
   })
 }
 
-export function getSoliloquy(date?: string, userId = USER_ID): Promise<{ date: string; content: string }> {
+export function getSoliloquy(date?: string, userId = USER_ID): Promise<ContentMeta> {
   const qs = date ? `&date=${date}` : ''
   return fetchJson(`${API_BASE}/v1/soliloquy?userId=${encodeURIComponent(userId)}${qs}`)
 }
@@ -120,7 +136,16 @@ export function recentSoliloquy(limit = 7, userId = USER_ID): Promise<{ entries:
   return fetchJson(`${API_BASE}/v1/soliloquy/recent?userId=${encodeURIComponent(userId)}&limit=${limit}`)
 }
 
-export function calendarMarks(month?: string, userId = USER_ID): Promise<{ month: string; marked: string[] }> {
+export interface CalendarDay {
+  date: string
+  hasJournal: boolean
+  hasSoliloquy: boolean
+  hasNote: boolean
+  noteStatus: string | null
+  hasStamp: boolean
+}
+
+export function calendarMarks(month?: string, userId = USER_ID): Promise<{ year: number; month: number; days: CalendarDay[] }> {
   const qs = month ? `&month=${month}` : ''
   return fetchJson(`${API_BASE}/v1/calendar?userId=${encodeURIComponent(userId)}${qs}`)
 }

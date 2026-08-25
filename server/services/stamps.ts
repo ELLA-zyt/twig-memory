@@ -15,6 +15,7 @@ export interface StampRecord {
   id: string
   type: StampType
   beadType: BeadType
+  beadName: string
   noteId: string
   stampedAt: string
   userNote?: string
@@ -62,8 +63,9 @@ function saveStamps(userId: string, state: UserStampState): void {
   writeFileSync(filePath(userId), JSON.stringify(state, null, 2), 'utf8')
 }
 
+const TZ = process.env.MUNINN_TZ || 'Asia/Shanghai'
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Date().toLocaleDateString('sv-SE', { timeZone: TZ })
 }
 
 function randomId(prefix: string): string {
@@ -104,6 +106,7 @@ export function stampNote(
   engine?: HeadlessMuninn,
 ): { record: StampRecord; jar: JarEntry; bead: { id: BeadType; name: string; color: string; texture: string; whisper: string; source: string } } | null {
   const state = loadStamps(userId)
+  if (state.records.some((r) => r.noteId === noteId)) return null
   const stampDef = STAMP_REGISTRY[type]
   const beadType = selectBead(type, noteContent, state.jar)
   const bead = BEAD_REGISTRY[beadType]
@@ -112,6 +115,7 @@ export function stampNote(
     id: randomId('stamp'),
     type,
     beadType,
+    beadName: bead.name,
     noteId,
     stampedAt: new Date().toISOString(),
   }
@@ -162,6 +166,6 @@ export function recentStamps(userId: string, limit = 7): { type: string; beadTyp
     beadType: r.beadType,
     beadName: BEAD_REGISTRY[r.beadType].name,
     date: r.stampedAt.slice(0, 10),
-    notePreview: state.jar.find((j) => j.id === r.id)?.memoPreview ?? '',
+    notePreview: state.jar.find((j) => j.noteId === r.noteId && j.stampedAt === r.stampedAt)?.memoPreview ?? '',
   }))
 }

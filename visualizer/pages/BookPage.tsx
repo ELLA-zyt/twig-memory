@@ -1,23 +1,29 @@
 import { useEffect, useState } from 'react'
-import { calendarMarks, getJournal } from '../services/api'
+import { calendarMarks, getJournal, type CalendarDay } from '../services/api'
 import { PageHead } from '../components/nouveau'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
 export default function BookPage() {
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
-  const [marked, setMarked] = useState<string[]>([])
+  const [month, setMonth] = useState(() => new Date().toLocaleDateString('sv-SE').slice(0, 7))
+  const [days, setDays] = useState<CalendarDay[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [journal, setJournal] = useState<string>('')
+  const [journalLoading, setJournalLoading] = useState(false)
 
   useEffect(() => {
-    calendarMarks(month, USER_ID).then((r) => setMarked(r.marked))
+    calendarMarks(month, USER_ID).then((r) => setDays(r.days))
   }, [month])
 
   const open = async (date: string) => {
     setSelected(date)
-    const j = await getJournal(date, USER_ID)
-    setJournal(j.content)
+    setJournalLoading(true)
+    try {
+      const j = await getJournal(date, USER_ID)
+      setJournal(j.content ?? '')
+    } finally {
+      setJournalLoading(false)
+    }
   }
 
   const daysInMonth = new Date(Number(month.split('-')[0]), Number(month.split('-')[1]), 0).getDate()
@@ -26,6 +32,7 @@ export default function BookPage() {
     const d = i - firstDay + 1
     return d > 0 ? String(d).padStart(2, '0') : ''
   })
+  const dayMap = new Map(days.map((d) => [d.date, d]))
 
   return (
     <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
@@ -42,7 +49,8 @@ export default function BookPage() {
             {cells.map((c, i) => {
               if (!c) return <div key={i} />
               const date = `${month}-${c}`
-              const has = marked.includes(date)
+              const d = dayMap.get(date)
+              const has = d && (d.hasJournal || d.hasSoliloquy || d.hasNote || d.hasStamp)
               return (
                 <button
                   key={i}
@@ -60,9 +68,13 @@ export default function BookPage() {
           {selected ? (
             <div>
               <div className="text-[10px] text-fog mb-2">{selected} · 日记</div>
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap font-display leading-relaxed text-foreground/90">
-                {journal || '暂无日记'}
-              </div>
+              {journalLoading ? (
+                <div className="text-sm text-fog animate-pulse py-8 text-center">加载中...</div>
+              ) : (
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap font-display leading-relaxed text-foreground/90">
+                  {journal || '暂无日记'}
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-sm text-fog text-center py-20">点击左侧有标记的日期查看日记</div>

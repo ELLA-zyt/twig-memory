@@ -6,16 +6,20 @@ const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
 export default function JournalCard() {
   const [content, setContent] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => new Date().toLocaleDateString('sv-SE'))
 
   useEffect(() => {
-    getJournal(date, USER_ID).then((r) => setContent(r.content))
+    getJournal(date, USER_ID).then((r) => setContent(r.content ?? ''))
   }, [date])
 
   const generate = async () => {
-    const r = await generateJournal(USER_ID)
-    setDate(r.date)
-    setContent(r.content)
+    try {
+      const r = await generateJournal(USER_ID, date)
+      setDate(r.date)
+      setContent(r.content ?? '')
+    } catch (err) {
+      console.error('[journal generate error]', err)
+    }
   }
 
   return (

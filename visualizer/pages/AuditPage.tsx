@@ -1,41 +1,80 @@
 import { useState } from 'react'
-import { audit, reflect } from '../services/api'
-import { PageHead, SectionTitle } from '../components/nouveau'
+import { RefreshCw } from 'lucide-react'
+import { PageHead, Seal, SectionTitle } from '../components/nouveau'
+import { audit } from '../services/api'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
-export default function AuditPage() {
-  const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<any>(null)
+interface AuditRecord {
+  ranAt: string
+  divergence: number
+  baseline: number
+  driftSignal: boolean
+  flaggedForUser: boolean
+  notes: string[]
+  sampleSize: number
+}
 
-  const runReflect = async () => {
-    setBusy(true)
-    try {
-      const r = await reflect(USER_ID)
-      setResult({ type: 'reflect', r })
-    } finally { setBusy(false) }
-  }
+export default function AuditPage() {
+  const [result, setResult] = useState<AuditRecord | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const runAudit = async () => {
-    setBusy(true)
+    setLoading(true)
     try {
-      const r = await audit(USER_ID)
-      setResult({ type: 'audit', r })
-    } finally { setBusy(false) }
+      const res = (await audit(USER_ID)) as AuditRecord
+      setResult(res)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
-      <PageHead kicker="Audit · 自检日志" title="反刍与审计" />
-      <div className="flex gap-3 mb-6">
-        <button onClick={runReflect} disabled={busy} className="nv-btn px-5 py-2">触发反刍</button>
-        <button onClick={runAudit} disabled={busy} className="nv-btn nv-btn-gold px-5 py-2">盲推导审计</button>
-      </div>
+      <PageHead kicker="Audit · 自检日志" title="自检日志" right={
+        <button onClick={runAudit} disabled={loading} className="nv-chip nv-chip-gold cursor-pointer">
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> 运行盲推导审计
+        </button>
+      } />
+      {loading && (
+        <div className="text-sm text-fog mt-4">审计运行中…（盲推导需多次 LLM 调用，可能需要 30-60 秒）</div>
+      )}
+      {error && (
+        <div className="text-sm text-red-500 mt-4">{error}</div>
+      )}
       {result && (
-        <div className="nv-card nv-card-double p-5">
-          <SectionTitle>{result.type === 'reflect' ? '反刍结果' : '审计结果'}</SectionTitle>
-          <pre className="text-xs text-fog whitespace-pre-wrap">{JSON.stringify(result.r, null, 2)}</pre>
+        <div className="nv-card nv-card-double p-5 mt-4">
+          <div className="text-[10px] text-fog">{new Date(result.ranAt).toLocaleString('zh-CN')}</div>
+          <div className="flex items-center gap-4 mt-3">
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-xs text-fog">分歧</span>
+              <div className="nv-meter nv-meter-gold flex-1"><div style={{ width: `${result.divergence * 100}%` }} /></div>
+              <span className="text-xs font-mono text-gold">{result.divergence.toFixed(2)}</span>
+            </div>
+            <div className="text-xs font-mono text-fog">基线 {result.baseline.toFixed(2)}</div>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {result.driftSignal && <Seal accent="raven">漂移信号</Seal>}
+            {result.flaggedForUser && <Seal accent="gold">需用户关注</Seal>}
+            {!result.driftSignal && !result.flaggedForUser && <Seal accent="fog">自然方差内</Seal>}
+          </div>
+          <div className="mt-4">
+            <SectionTitle>差异点 · NOTES</SectionTitle>
+            <div className="mt-2">
+              {result.notes.map((note, i) => (
+                <div key={i} className="text-sm text-foreground/80 mt-1">· {note}</div>
+              ))}
+            </div>
+          </div>
+          <div className="text-[10px] text-fog mt-4">盲推导抽样 {result.sampleSize} 次</div>
         </div>
+      )}
+      {!result && !loading && !error && (
+        <div className="text-sm text-fog text-center py-20">点击上方按钮运行第一次盲推导审计</div>
       )}
     </div>
   )

@@ -8,7 +8,7 @@ export default function SoliloquyCard() {
   const [content, setContent] = useState('')
 
   useEffect(() => {
-    getSoliloquy(undefined, USER_ID).then((r) => setContent(r.content))
+    getSoliloquy(undefined, USER_ID).then((r) => setContent(r.content ?? ''))
   }, [])
 
   return (

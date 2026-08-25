@@ -14,6 +14,7 @@ dist-ssr
 
 # 叙事记忆引擎持久化数据（按用户隔离，不应入库）
 server/data/
+server/data-backup/
 
 # Editor directories and files
 .vscode/*

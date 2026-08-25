@@ -3,6 +3,7 @@
  * 通过 setChatTransport 注入后，visualizer/engine/llm.ts 里的全部判定函数
  * （adjudicateFree / adjudicateClosure / adjudicateCounter）即自动走直连，
  * 前端浏览器路径（vite 代理）不受影响。
+ * 自适应：思考型模型（kimi-k2.6 / MiniMax-M3）reasoning 耗尽 max_tokens 时自动 2x 重试至 8000 封顶
  */
 import { setChatTransport } from '../visualizer/engine/llm'
 import { readFileSync } from 'node:fs'
@@ -13,8 +14,19 @@ export function loadEnvLocal(): void {
     const path = new URL('../.env.local', import.meta.url)
     const text = readFileSync(path, 'utf8')
     for (const line of text.split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2]
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/)
+      if (!m) continue
+      let val = m[2].trim()
+      // 引号外的 # 截断为注释
+      if (!val.startsWith('"') && !val.startsWith("'")) {
+        const hashIdx = val.indexOf('#')
+        if (hashIdx >= 0) val = val.slice(0, hashIdx).trim()
+      }
+      // strip 首尾匹配的引号
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1)
+      }
+      if (!process.env[m[1]]) process.env[m[1]] = val
     }
   } catch {
     // 文件不存在则忽略
@@ -22,7 +34,7 @@ export function loadEnvLocal(): void {
 }
 
 /** 批量作答 prompt 较长（k×碎片 × 5 题），且异源模型可能是慢思考型，超时给足 */
-const TIMEOUT_MS = 60000
+const TIMEOUT_MS = 180000
 /** 429 指数退避：5s / 10s / 20s / 40s（免费档 RPM 低，评测或反刍连发时会被限流） */
 const RETRY_BASE_MS = 5000
 const MAX_RETRIES = 4
@@ -39,10 +51,12 @@ export function registerNodeTransport(): boolean {
 
   setChatTransport(async (messages, opts) => {
     let lastErr: unknown = null
+    let adaptiveMax = opts?.maxTokens
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** (attempt - 1)))
+      const adaptiveTimeout = Math.max(TIMEOUT_MS, adaptiveMax ? adaptiveMax * 30 : 0)
       const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+      const timer = setTimeout(() => ctrl.abort(), adaptiveTimeout)
       try {
         const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
           method: 'POST',
@@ -54,7 +68,7 @@ export function registerNodeTransport(): boolean {
             // 按调用覆盖（异源反证生成的第二模型），缺省回落默认模型
             model: opts?.model || model,
             temperature: opts?.temperature ?? 0.3,
-            max_tokens: opts?.maxTokens ?? 700,
+            max_tokens: adaptiveMax ?? 3000,
             messages,
           }),
           signal: ctrl.signal,
@@ -64,8 +78,18 @@ export function registerNodeTransport(): boolean {
           continue
         }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const data = await resp.json()
+        const data: any = await resp.json()
         const raw = data?.choices?.[0]?.message?.content
+        // 自适应：思考型模型 reasoning 耗尽 max_tokens 时自动增大重试
+        const finishReason = data?.choices?.[0]?.finish_reason
+        const reasoningTokens = data?.usage?.completion_tokens_details?.reasoning_tokens ?? 0
+        if (finishReason === 'length' && reasoningTokens > 0 && (!raw || !raw.trim())) {
+          adaptiveMax = Math.min((opts?.maxTokens ?? 3000) * 2 ** (attempt + 1), 8000)
+          if (attempt < MAX_RETRIES) {
+            lastErr = new Error(`思考耗尽 max_tokens（reasoning=${reasoningTokens}），重试 max_tokens=${adaptiveMax}`)
+            continue
+          }
+        }
         if (typeof raw !== 'string' || !raw.trim()) throw new Error('empty response')
         // 思考型模型（如 MiniMax-M3）会在 content 内联 <think>…</think>，且思考 token 计入
         // max_tokens——预算不足时输出只剩半截思考。剥离后再返回，截断残留的空内容按失败重试。

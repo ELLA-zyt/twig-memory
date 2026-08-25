@@ -3,47 +3,34 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppLayout from './layout/AppLayout'
-import DemoPage from './pages/DemoPage'
-import EvaluationPage from './pages/EvaluationPage'
-import FragmentsPage from './pages/FragmentsPage'
-import OverviewPage from './pages/OverviewPage'
-import RightsPage from './pages/RightsPage'
-import ThreadsPage from './pages/ThreadsPage'
-import UnderstandingPage from './pages/UnderstandingPage'
 import TodayPage from './pages/TodayPage'
 import BookPage from './pages/BookPage'
 import ClaimsPage from './pages/ClaimsPage'
+import SettingsPage from './pages/SettingsPage'
+import ThreadsPage from './pages/ThreadsPage'
 import ThreadDetailPage from './pages/ThreadDetailPage'
 import AuditPage from './pages/AuditPage'
-import SettingsPage from './pages/SettingsPage'
-import { EngineProvider } from './state/EngineContext'
+import DayCardPage from './pages/DayCardPage'
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <EngineProvider>
-        <TooltipProvider delayDuration={300}>
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route index element={<TodayPage />} />
-              <Route path="overview" element={<OverviewPage />} />
-              <Route path="book" element={<BookPage />} />
-              <Route path="claims" element={<ClaimsPage />} />
-              <Route path="threads" element={<ThreadsPage />} />
-              <Route path="threads/:id" element={<ThreadDetailPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="understanding" element={<UnderstandingPage />} />
-              <Route path="fragments" element={<FragmentsPage />} />
-              <Route path="evaluation" element={<EvaluationPage />} />
-              <Route path="rights" element={<RightsPage />} />
-              <Route path="demo" element={<DemoPage />} />
-            </Route>
-          </Routes>
-          {/* shadcn Sonner：全局通知；主题变量继承穆夏描金/羊皮纸 */}
-          <Toaster theme="light" position="bottom-right" richColors closeButton />
-        </TooltipProvider>
-      </EngineProvider>
+      <TooltipProvider delayDuration={300}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<TodayPage />} />
+            <Route path="book" element={<BookPage />} />
+            <Route path="day" element={<DayCardPage />} />
+            <Route path="threads" element={<ThreadsPage />} />
+            <Route path="threads/:id" element={<ThreadDetailPage />} />
+            <Route path="claims" element={<ClaimsPage />} />
+            <Route path="audit" element={<AuditPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+        {/* shadcn Sonner：全局通知；主题变量继承穆夏描金/羊皮纸 */}
+        <Toaster theme="light" position="bottom-right" richColors closeButton />
+      </TooltipProvider>
     </ErrorBoundary>
   )
 }

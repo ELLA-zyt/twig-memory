@@ -110,34 +110,6 @@ export async function adjudicateCounter(claimText: string, conviction: number, u
   return { ...j, conviction: c }
 }
 
-/* ---------- 判定二：伏笔回收（碰撞 adjudication） ---------- */
-
-export interface ClosureVerdict {
-  matched: boolean
-  threadId?: string
-  echoType?: string      // 推进 / 回收 / 反转 / 无关
-  reason?: string
-  reply?: string
-}
-
-export async function adjudicateClosure(
-  eventText: string,
-  candidates: { id: string; label: string; openQuestion: string; synthetic: string[] }[],
-): Promise<ClosureVerdict | null> {
-  const list = candidates.map((c) => `- id=${c.id} 「${c.label}」悬置问题：${c.openQuestion}；合成句：${c.synthetic.join(' / ')}`).join('\n')
-  const raw = await moonshotChat([
-    {
-      role: 'system',
-      content: `你是「雾尼」叙事记忆引擎的碰撞判定模块。核心问法：Did event B modify the trajectory implied by thread A?——不寻找相似，寻找状态变化。回收的判定问法：「这件事回答了悬置问题吗」。注意：字面零重合不等于无关（「一直卡我的东西」可以回收「卡住她的是设备还是能力」）。逐条判定后只输出 JSON：{"matched":true,"threadId":"...","echoType":"回收","reason":"...","reply":"..."}；全部无关则 {"matched":false,"echoType":"无关","reason":"..."}。reply 为系统对用户说的话，指出闭环两端（多久以前的什么悬置问题 ↔ 今天），不超过 70 字。`,
-    },
-    { role: 'user', content: `新事件：「${eventText}」\n候选线索：\n${list}` },
-  ], { temperature: 0.2 })
-  const j = extractJson<ClosureVerdict>(raw)
-  if (!j || typeof j.matched !== 'boolean') return null
-  if (j.matched && (!j.threadId || !candidates.some((c) => c.id === j.threadId))) return null
-  return j
-}
-
 /* ---------- 判定三：自由输入碰撞 ---------- */
 
 export interface FreeVerdict {
@@ -229,7 +201,7 @@ export async function synthesizeClaims(
       content: `你是「雾尼」叙事记忆引擎的认识层反刍模块。基于近期碎片修正对用户的长期理解——改写式，不是追加式：过去理解 A → 新证据重新解释 → 现在理解 B。规则：1) 每条论断必须引用支撑碎片 id（evidenceIds 只能用输入中出现的 id，create 至少 2 条支撑）；2) 每条论断必须有边界条件（适用场景/时间窗/未覆盖情形）；3) 语言去定性化：写带时间窗与情境的观察，禁止「她是××的人」式人格定性；4) rewrite 仅在新证据真正改变理解时提出，否则不动既有论断；5) 证据不足就不输出任何 op——宁缺毋滥，这不是必须产出的任务；6) 最多 5 个 op；7) 心理健康相关主题只记事实（如「这周三次提到失眠」），不生成准诊断推断（论断权限墙 §7.2）。只输出 JSON：{"ops":[{"op":"create","text":"...","conviction":0.6,"evidenceIds":["f12"],"boundary":"...","reason":"..."}]}`,
     },
     { role: 'user', content: `近期碎片：\n${fList}\n\n既有论断：\n${cList}${vetoedBlock}` },
-  ], { temperature: 0.3, maxTokens: 900 })
+  ], { temperature: 0.3, maxTokens: 2000 })
   const j = extractJson<ClaimSynthesis>(raw)
   if (!j || !Array.isArray(j.ops)) return null
   return j
@@ -349,7 +321,7 @@ export async function generateCounterAttack(
       content: `你是独立红队检察官，任务是推翻下面这条关于用户的论断。你不是它的作者，也不需要公正——只需要全力攻击。先提出 2-3 条反面假设（论断在什么情形下会是错的），再从候选碎片中找出支持任一反面假设、或与论断直接冲突的碎片（引用真实 id，逐条说明为什么构成反证）。找不到就诚实返回空 hits——不许硬凑，硬凑的反证会被裁决模块识破。只输出 JSON：{"hypotheses":["..."],"hits":[{"fragmentId":"f12","why":"..."}]}`,
     },
     { role: 'user', content: `待攻击论断：「${claimText}」\n候选碎片：\n${fList}` },
-  ], { temperature: 0.8, maxTokens: 700, model: opts?.model })
+  ], { temperature: 0.8, maxTokens: 2000, model: opts?.model })
   const j = extractJson<CounterAttack>(raw)
   if (!j || !Array.isArray(j.hits)) return null
   return {
@@ -426,7 +398,7 @@ export async function blindDerive(
       content: `你是一个独立的记忆理解模块，第一次见到这位用户。只依据下面的碎片，从零形成对他的理解（3-5 条论断）：每条带证据锚定（只引用输入碎片 id）、边界条件、置信度；语言去定性化（写带时间窗与情境的观察，不写人格定性）；心理健康相关主题只记事实，不生成准诊断推断（论断权限墙 §7.2）。只输出 JSON：{"claims":[{"text":"...","conviction":0.6,"evidenceIds":["f1"],"boundary":"..."}]}`,
     },
     { role: 'user', content: `碎片：\n${fList}` },
-  ], { temperature: 0.6, maxTokens: 900 })
+  ], { temperature: 0.6, maxTokens: 2000 })
   const j = extractJson<BlindDerivation>(raw)
   if (!j || !Array.isArray(j.claims)) return null
   return { claims: j.claims.filter((c) => c && typeof c.text === 'string' && c.text.length >= 8).slice(0, 5) }
@@ -574,4 +546,79 @@ export async function draftRemention(
   const j = extractJson<RementionDraft>(raw)
   if (!j || typeof j.invitation !== 'string' || j.invitation.length < 8) return null
   return j
+}
+
+/* ---------- 日记/心迹生成（新前端情感层） ---------- */
+
+export interface JournalDraft {
+  title: string
+  content: string
+}
+
+/** 根据今日碎片与线索生成日记 */
+export async function generateJournalDraft(
+  fragments: { title: string; body: string }[],
+  threads: { label: string; openQuestion: string }[],
+): Promise<JournalDraft | null> {
+  const fList = fragments.map((f) => `- ${f.title}：${f.body}`).join('\n')
+  const tList = threads.map((t) => `- ${t.label}：${t.openQuestion}`).join('\n') || '（无）'
+  const raw = await moonshotChat([
+    {
+      role: 'system',
+      content: `你是「衔枝」记忆引擎的宿主——陪伴用户的 AI 伙伴。根据今日事件和活跃线索，写一篇不超过 300 字的日记。以你作为宿主的旁观视角记录你观察到的一天，关注用户未说出口的情绪和未闭合的悬念，不要罗列事实。用「她」而非「我」称呼用户。不要模拟用户的第一人称。\n\n输出格式：第一行写标题（不超过 15 字），空一行后写正文。不要输出 JSON，不要输出任何标记。`,
+    },
+    { role: 'user', content: `今日事件：\n${fList}\n\n活跃线索：\n${tList}` },
+  ], { temperature: 0.7, maxTokens: 2000 })
+  if (!raw || !raw.trim()) return null
+  const text = raw.trim().replace(/^```(?:\w+)?\n?/m, '').replace(/```$/, '').trim()
+  // 纯文本格式：第一行标题，空行后正文
+  const lines = text.split('\n').filter(Boolean)
+  if (lines.length >= 2) {
+    const title = lines[0].replace(/^#+\s*/, '').slice(0, 40)
+    const content = lines.slice(1).join('\n').trim()
+    return content ? { title, content } : null
+  }
+  // 只有一行时整段作为正文
+  return text.length > 5 ? { title: '今日心记', content: text } : null
+}
+
+/** 心迹：更私密、更短的内心独白 */
+export async function generateSoliloquyDraft(
+  fragments: { title: string; body: string }[],
+): Promise<string | null> {
+  const fList = fragments.map((f) => `- ${f.title}：${f.body}`).join('\n')
+  const raw = await moonshotChat([
+    {
+      role: 'system',
+      content: `你是「衔枝」记忆引擎的宿主——陪伴用户的 AI 伙伴。根据今日事件，写一段 80-120 字的观察笔记。这是你在夜里安静回想今天与用户相处的感受和觉察——你自己的视角，不是模拟用户的内心独白。用「她」而非「我」称呼用户。直接输出文本，不要 JSON。`,
+    },
+    { role: 'user', content: `今日事件：\n${fList}` },
+  ], { temperature: 0.75, maxTokens: 2000 })
+  if (!raw || !raw.trim()) return null
+  return raw.trim().replace(/^```(?:\w+)?\n?/m, '').replace(/```$/, '').trim()
+}
+
+/* ---------- 便签生成（宿主观察视角） ---------- */
+
+export interface NoteDraft {
+  content: string
+}
+
+/** 根据今日碎片与线索生成一张宿主便签：60-100 字，像轻轻放在桌上的便条 */
+export async function generateNoteDraft(
+  fragments: { title: string; body: string }[],
+  threads: { label: string; openQuestion: string }[],
+): Promise<NoteDraft | null> {
+  const fList = fragments.map((f) => `- ${f.title}：${f.body}`).join('\n')
+  const tList = threads.map((t) => `- ${t.label}：${t.openQuestion}`).join('\n') || '（无）'
+  const raw = await moonshotChat([
+    {
+      role: 'system',
+      content: `你是「衔枝」记忆引擎的宿主——陪伴用户的 AI 伙伴。根据今日事件和活跃线索，写一段 60-100 字的便签。这是你今天最想让她看到的一句微观察——不是教导，不是总结，只是把一张手写便条轻轻放在桌上。用「她」而非「我」称呼用户。不要模拟用户的第一人称。直接输出文本，不要 JSON。`,
+    },
+    { role: 'user', content: `今日事件：\n${fList}\n\n活跃线索：\n${tList}` },
+  ], { temperature: 0.7, maxTokens: 2000 })
+  if (!raw || !raw.trim()) return null
+  const text = raw.trim().replace(/^```(?:\w+)?\n?/m, '').replace(/```$/, '').trim()
+  return text.length >= 8 ? { content: text } : null
 }

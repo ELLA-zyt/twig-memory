@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getState } from '../services/api'
-import { PageHead, SectionTitle } from '../components/nouveau'
+import { PageHead } from '../components/nouveau'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
 export default function SettingsPage() {
-  const [state, setState] = useState<{ fragments: any[]; threads: any[]; claims: any[] } | null>(null)
+  const [state, setState] = useState<{ fragments: unknown[]; threads: unknown[]; claims: unknown[] } | null>(null)
 
   useEffect(() => {
     getState(USER_ID).then(setState)

@@ -46,6 +46,11 @@ export class EngineManager {
     }
   }
 
+  /** 触发反刍：自动注入 userId 以生成日记/心迹 */
+  async reflect(userId: string): Promise<ReturnType<HeadlessMuninn['reflect']>> {
+    return this.withLock(userId, (e) => e.reflect(userId))
+  }
+
   /** 有变更才写盘（tmp + rename 原子写） */
   persist(userId: string): void {
     const e = this.engines.get(userId)
