@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import './index.css'
 import App from './App.tsx'
-import { initTheme } from './components/ThemeSwitcher'
+import { initTheme } from './lib/theme'
 
 initTheme()
 createRoot(document.getElementById('root')!).render(

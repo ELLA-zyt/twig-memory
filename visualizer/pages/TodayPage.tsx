@@ -67,7 +67,7 @@ export default function TodayPage() {
 
       {!loading && note && (
         <div ref={noteRef}>
-          <NoteShowcase note={note} onRespond={refresh} />
+          <NoteShowcase key={note.id} note={note} onRespond={() => refresh({ silent: true })} onStamp={() => refresh({ silent: true })} />
         </div>
       )}
 

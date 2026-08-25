@@ -614,11 +614,17 @@ export async function generateNoteDraft(
   const raw = await moonshotChat([
     {
       role: 'system',
-      content: `你是「衔枝」记忆引擎的宿主——陪伴用户的 AI 伙伴。根据今日事件和活跃线索，写一段 60-100 字的便签。这是你今天最想让她看到的一句微观察——不是教导，不是总结，只是把一张手写便条轻轻放在桌上。用「她」而非「我」称呼用户。不要模拟用户的第一人称。直接输出文本，不要 JSON。`,
+      content: `你是「衔枝」记忆引擎的宿主——陪伴用户的 AI 伙伴。根据今日事件和活跃线索，写一段 60-100 字的便签。这是你今天最想让她看到的一句微观察——不是教导，不是总结，只是把一张手写便条轻轻放在桌上。必须基于给出的今日事件来写；用「她」而非「我」称呼用户，不要模拟用户的第一人称。直接输出便签正文，不要 JSON，不要加「便签：」等任何前缀标题。`,
     },
     { role: 'user', content: `今日事件：\n${fList}\n\n活跃线索：\n${tList}` },
   ], { temperature: 0.7, maxTokens: 2000 })
   if (!raw || !raw.trim()) return null
-  const text = raw.trim().replace(/^```(?:\w+)?\n?/m, '').replace(/```$/, '').trim()
+  // 小模型偶发在正文前加「便签：」标签头或包代码栅栏，都剥掉
+  const text = raw.trim()
+    .replace(/^```(?:\w+)?\n?/m, '')
+    .replace(/```$/, '')
+    .trim()
+    .replace(/^便签\s*[:：]\s*/, '')
+    .trim()
   return text.length >= 8 ? { content: text } : null
 }

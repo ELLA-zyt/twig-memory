@@ -13,7 +13,7 @@ interface StampRitualProps {
   onStamp?: () => void
   onShake?: () => void
   onRipple?: () => void
-  onImprint?: () => void
+  onImprint?: (type: StampType) => void
 }
 
 export default function StampRitual({
@@ -67,7 +67,7 @@ export default function StampRitual({
       setTimeout(() => {
         onShake?.()
         onRipple?.()
-        onImprint?.()
+        onImprint?.(selected)
         setReward(res.bead)
         setPhase('done')
         setFalling(null)

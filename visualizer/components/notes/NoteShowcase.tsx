@@ -3,6 +3,7 @@ import type { Note } from '../../services/api'
 import { respondNote } from '../../services/api'
 import { STAMP_REGISTRY, type StampType } from '../../../shared/stamps'
 import StampRitual from '../stamps/StampRitual'
+import WaxSeal from '../stamps/WaxSeal'
 import { cn } from '@/lib/utils'
 
 interface NoteShowcaseProps {
@@ -16,7 +17,9 @@ const NoteShowcase = forwardRef<HTMLDivElement, NoteShowcaseProps>(function Note
   const [busy, setBusy] = useState(false)
   const [shaking, setShaking] = useState(false)
   const [rippleKey, setRippleKey] = useState(0)
-  const [imprinted, setImprinted] = useState(false)
+  // 刚盖下的章（服务端回写 note.stamp 之前先本地渲染压痕，保住落印动画）
+  const [freshStamp, setFreshStamp] = useState<StampType | null>(null)
+  const [imprintPlaced, setImprintPlaced] = useState(false)
   const anchorRef = useRef<HTMLDivElement>(null)
 
   const submit = async () => {
@@ -40,9 +43,16 @@ const NoteShowcase = forwardRef<HTMLDivElement, NoteShowcaseProps>(function Note
     setRippleKey((k) => k + 1)
   }
 
-  const triggerImprint = () => {
-    setImprinted(true)
+  const triggerImprint = (type: StampType) => {
+    setFreshStamp(type)
+    // 双 rAF：先挂到起始态（放大+透明），下一帧再切到落印态，让 transition 生效
+    requestAnimationFrame(() => requestAnimationFrame(() => setImprintPlaced(true)))
   }
+
+  // 优先用服务端回写的 stamp 类型；回写前用本地刚盖的类型兜底
+  const stampType = (note.stamp?.type as StampType | undefined) ?? freshStamp ?? undefined
+  const imprintStamp = stampType ? STAMP_REGISTRY[stampType] : undefined
+  const imprintVisible = Boolean(note.stamp) || imprintPlaced
 
   return (
     <div className="relative">
@@ -80,21 +90,25 @@ const NoteShowcase = forwardRef<HTMLDivElement, NoteShowcaseProps>(function Note
         {/* 压痕锚点 */}
         <div ref={anchorRef} className="absolute bottom-5 right-5 w-1 h-1" />
 
-        {/* 已盖印压痕 */}
-        {note.stamp && (
+        {/* 已盖印压痕：中心与坠落锚点对齐（锚点距边 20px，压痕半径 35px） */}
+        {imprintStamp && (
           <div
-            className={cn(
-              'absolute bottom-5 right-5 transition-all duration-500',
-              imprinted ? 'opacity-90 scale-100' : 'opacity-0 scale-110'
-            )}
-            style={{ transform: 'rotate(-7deg)' }}
+            className="absolute pointer-events-none transition-all duration-500"
+            style={{
+              bottom: 'calc(1.25rem - 35px)',
+              right: 'calc(1.25rem - 35px)',
+              width: 70,
+              height: 70,
+              opacity: imprintVisible ? 0.92 : 0,
+              transform: `rotate(-7deg) scale(${imprintVisible ? 1 : 1.1})`,
+              filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.25))',
+            }}
           >
-            <div
-              className="w-[70px] h-[70px] rounded-full flex items-center justify-center border-2"
-              style={{ borderColor: STAMP_REGISTRY[note.stamp.type as StampType]?.baseColor, background: `${STAMP_REGISTRY[note.stamp.type as StampType]?.baseColor}22` }}
-            >
-              <span className="text-[10px] text-center px-1 leading-none text-[#3d3d3d]">已封存</span>
-            </div>
+            <WaxSeal stamp={imprintStamp} size={70} />
+            {/* 落印扫光：仅新鲜盖印时播放一次 */}
+            {freshStamp && imprintPlaced && (
+              <div className="imprint-sweep absolute inset-0 rounded-full overflow-hidden" />
+            )}
           </div>
         )}
       </div>
