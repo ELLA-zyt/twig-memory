@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node --import tsx server/http.ts",
-    "server:http": "tsx server/http.ts",
+    "server:http": "tsx watch server/http.ts",
     "server:mcp": "tsx server/mcp.ts"
   },
   "dependencies": {

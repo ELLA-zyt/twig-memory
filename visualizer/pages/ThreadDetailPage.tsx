@@ -34,14 +34,14 @@ export default function ThreadDetailPage() {
   }, [threadId])
 
   if (loading) return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <PageHead kicker="Thread · 线索详情" title="加载中..." />
       <div className="text-sm text-fog mt-4">加载中...</div>
     </div>
   )
 
   if (error) return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <Link to="/threads" className="inline-flex items-center gap-1.5 text-sm text-fog hover:text-foreground mb-4">
         <ArrowLeft size={14} /> 返回线索层
       </Link>
@@ -50,7 +50,7 @@ export default function ThreadDetailPage() {
   )
 
   if (!thread) return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <Link to="/threads" className="inline-flex items-center gap-1.5 text-sm text-fog hover:text-foreground mb-4">
         <ArrowLeft size={14} /> 返回线索层
       </Link>
@@ -61,7 +61,7 @@ export default function ThreadDetailPage() {
   const sortedEvents = [...events].sort((a, b) => a.day - b.day)
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <Link to="/threads" className="inline-flex items-center gap-1.5 text-sm text-fog hover:text-foreground mb-4">
         <ArrowLeft size={14} /> 返回线索层
       </Link>

@@ -161,7 +161,7 @@ export interface Thread {
 }
 
 export interface MuninnState {
-  fragments: { id: string; dateLabel: string; title: string; body: string }[]
+  fragments: { id: string; dateLabel: string; title: string; body: string; threadIds?: string[] }[]
   threads: Thread[]
   claims: Claim[]
 }
@@ -190,4 +190,40 @@ export function audit(userId = USER_ID): Promise<unknown> {
     method: 'POST',
     body: JSON.stringify({ userId }),
   })
+}
+
+/* ---------- 引擎状态仪表盘（全部真实数据：/health 状态位 + 存储统计 + 审计落盘） ---------- */
+
+export interface HealthStatus {
+  ok: boolean
+  llm: 'live' | 'heuristic-only'
+  embed: 'vector-recall' | 'dragonvein-only'
+  auth: boolean
+}
+
+export function getHealth(): Promise<HealthStatus> {
+  return fetchJson(`${API_BASE}/health`)
+}
+
+export interface StorageStats {
+  totalBytes: number
+  parts: { name: string; bytes: number }[]
+  scannedAt: string
+}
+
+export function getStorage(): Promise<StorageStats> {
+  return fetchJson(`${API_BASE}/v1/storage`)
+}
+
+export interface AuditSnapshot {
+  ranAt: string
+  divergence: number
+  baseline: number
+  driftSignal: boolean
+  flaggedForUser: boolean
+  sampleSize: number
+}
+
+export function getLastAudit(userId = USER_ID): Promise<{ record: AuditSnapshot | null }> {
+  return fetchJson(`${API_BASE}/v1/audit/last?userId=${encodeURIComponent(userId)}`)
 }

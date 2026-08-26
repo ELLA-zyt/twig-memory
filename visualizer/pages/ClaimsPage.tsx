@@ -15,7 +15,7 @@ export default function ClaimsPage() {
   }, [])
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <PageHead kicker="Claims · 理解文档" title="理解文档" />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {claims.map((c) => (

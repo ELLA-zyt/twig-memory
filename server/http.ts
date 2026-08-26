@@ -9,7 +9,9 @@
  *   POST /v1/contest { userId, claimId, note } : 用户否决 → contested（非删除）
  *   POST /v1/counter { userId, claimId, text } : 矛盾响应判定（LLM）
  *   POST /v1/reflect { userId } : 反刍（认识层抽取/改写 + 反证搜索 + 合成句重生成 + merge/split）
- *   POST /v1/audit  { userId } : 盲推导审计（null model 基线 + 漂移信号 + 用户可见标记）
+ *   POST /v1/audit  { userId } : 盲推导审计（null model 基线 + 漂移信号 + 用户可见标记；结果落盘保留最近 20 条）
+ *   GET  /v1/audit/last?userId= : 最近一次审计记录（无则 null）
+ *   GET  /v1/storage           : 数据目录存储占用（按顶层条目聚合）
  *   POST /v1/window { userId, claimId, days? } : 开启对照窗口（仅 low 风险论断，设计债务⑤）
  *   POST /v1/intervene { userId, claimId?, text } : 宿主上报干预（内生标记，窗口校验剔除）
  *   POST /v1/correct { userId, fragmentId, note } : 事实层本人修正标注（不改原文，债务⑥）
@@ -41,6 +43,9 @@
  *   MUNINN_RATE_LIMIT   可选，每用户每分钟请求数上限（默认 0 = 不限制）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { EngineManager } from './manager'
@@ -71,6 +76,55 @@ if (!AUTH_TOKEN && process.env.NODE_ENV === 'production') {
 }
 
 const sseTransports = new Map<string, SSEServerTransport>()
+
+/* ---------- 仪表盘支撑：存储统计 + 审计落盘（与 store.ts 同一数据目录约定） ---------- */
+const DATA_DIR = process.env.MUNINN_DATA_DIR || join(dirname(fileURLToPath(import.meta.url)), 'data')
+const safeId = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+function storageStats() {
+  const walk = (p: string): number => {
+    const st = statSync(p)
+    if (!st.isDirectory()) return st.size
+    return readdirSync(p).reduce((sum, name) => sum + walk(join(p, name)), 0)
+  }
+  const parts: { name: string; bytes: number }[] = []
+  let totalBytes = 0
+  if (existsSync(DATA_DIR)) {
+    for (const name of readdirSync(DATA_DIR)) {
+      const bytes = walk(join(DATA_DIR, name))
+      totalBytes += bytes
+      parts.push({ name, bytes })
+    }
+    parts.sort((a, b) => b.bytes - a.bytes)
+  }
+  return { totalBytes, parts, scannedAt: new Date().toISOString() }
+}
+
+const auditLogPath = (userId: string) => join(DATA_DIR, `${safeId(userId)}.audit.json`)
+
+/** 审计结果落盘（保留最近 20 条）；失败只告警，不影响主请求 */
+function persistAudit(userId: string, record: unknown) {
+  try {
+    mkdirSync(DATA_DIR, { recursive: true })
+    const p = auditLogPath(userId)
+    const prev = existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : []
+    const list = (Array.isArray(prev) ? prev : []).concat(record)
+    writeFileSync(p, JSON.stringify(list.slice(-20), null, 2))
+  } catch (err) {
+    console.warn('[muninn] 审计结果落盘失败：', err instanceof Error ? err.message : err)
+  }
+}
+
+function lastAudit(userId: string): unknown | null {
+  try {
+    const p = auditLogPath(userId)
+    if (!existsSync(p)) return null
+    const list = JSON.parse(readFileSync(p, 'utf8'))
+    return Array.isArray(list) && list.length > 0 ? list[list.length - 1] : null
+  } catch {
+    return null
+  }
+}
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -214,9 +268,23 @@ const server = createServer(async (req, res) => {
       if (!uid) return send(res, 400, { error: 'userId 必填' })
       try {
         const result = await manager.withLock(uid, (e) => e.auditDrift())
+        persistAudit(uid, result)
         return send(res, 200, result)
       } catch (err) {
         return send(res, 503, { error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/audit/last') {
+      if (!userId) return send(res, 400, { error: 'userId 必填' })
+      return send(res, 200, { record: lastAudit(userId) })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/storage') {
+      try {
+        return send(res, 200, storageStats())
+      } catch (err) {
+        return send(res, 500, { error: err instanceof Error ? err.message : String(err) })
       }
     }
 

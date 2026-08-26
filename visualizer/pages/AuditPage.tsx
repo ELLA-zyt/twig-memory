@@ -34,7 +34,7 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="px-6 lg:px-8 py-6 max-w-[1440px] mx-auto">
+    <div className="anim-fade">
       <PageHead kicker="Audit · 自检日志" title="自检日志" right={
         <button onClick={runAudit} disabled={loading} className="nv-chip nv-chip-gold cursor-pointer">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> 运行盲推导审计

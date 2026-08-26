@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getSoliloquy } from '../../services/api'
-import { SectionTitle } from '../nouveau'
+import { SectionTitle, InkEmpty } from '../nouveau'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
@@ -15,7 +15,13 @@ export default function SoliloquyCard() {
     <div className="nv-card nv-card-double p-5">
       <SectionTitle>今日心迹 · Soliloquy</SectionTitle>
       <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-display min-h-[80px]">
-        {content || <span className="text-fog">今日暂无心迹</span>}
+        {content || (
+          <InkEmpty
+            compact
+            size={72}
+            quote="心湖未起涟漪，墨迹尚在途中。"
+          />
+        )}
       </div>
     </div>
   )

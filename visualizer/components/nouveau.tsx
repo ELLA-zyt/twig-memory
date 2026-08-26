@@ -170,3 +170,62 @@ export function Seal({ children, accent = 'fog', className }: { children: ReactN
     </span>
   )
 }
+
+/* ---------------- 衔枝淡水印：曲茎 + 互生小叶 + 菱尖 ---------------- */
+export function TwigWatermark({ size = 110, className }: { size?: number; className?: string }) {
+  const leaves: [number, number, number][] = [
+    // [cx, cy, 旋转角]：沿茎交替左右
+    [46, 78, -38], [58, 64, 132], [70, 52, -40], [82, 42, 128],
+  ]
+  return (
+    <svg viewBox="0 0 120 120" width={size} height={size} className={className} aria-hidden>
+      <g fill="none" stroke="hsl(var(--gold))" strokeWidth="1.4" strokeLinecap="round">
+        <path d="M26 98 C48 72 70 52 96 30" />
+        <path d="M96 30 l7 -7 M96 30 l1 -10" strokeWidth="1" opacity="0.7" />
+      </g>
+      {leaves.map(([cx, cy, r], i) => (
+        <ellipse key={i} cx={cx} cy={cy} rx="10" ry="3.1" transform={`rotate(${r} ${cx} ${cy})`} fill="hsl(var(--gold))" opacity="0.85" />
+      ))}
+      <rect x="94" y="16" width="5.5" height="5.5" transform="rotate(45 96.75 18.75)" fill="hsl(var(--gold))" />
+      <circle cx="30" cy="94" r="2" fill="hsl(var(--cinnabar))" opacity="0.8" />
+    </svg>
+  )
+}
+
+/* ---------------- 留白仪轨：淡水印 + 叙事引言 + 可选动作 ---------------- */
+export function InkEmpty({ quote, hint, children, size = 96, compact = false }: {
+  quote: string
+  hint?: string
+  children?: ReactNode
+  size?: number
+  compact?: boolean
+}) {
+  return (
+    <div className={cn('flex flex-col items-center justify-center text-center', compact ? 'py-4' : 'py-8')}>
+      <TwigWatermark size={size} className="opacity-[0.15]" />
+      <p className="mt-3 text-[13px] font-display italic text-fog">{quote}</p>
+      {hint && <p className="mt-1 text-[11px] text-fog/70">{hint}</p>}
+      {children && <div className="mt-4">{children}</div>}
+    </div>
+  )
+}
+
+/* ---------------- 活体脉搏：单次 QRS 波群 + 描画式流光（纯装饰，不标假数字） ---------------- */
+export function PulseLine({ className, label }: { className?: string; label?: string }) {
+  // 双心动周期：P 微隆 → PR 平走 → Q 下沉 → R 冲顶 → S 深槽 → ST 回归 → T 饱满复极（第二组 +300 平移）
+  const d = 'M0 30 L140 30 C148 30 152 24 158 24 C164 24 168 30 174 30 L190 30 L195 35 L204 4 L213 48 L220 30 L235 30 C245 30 252 16 265 16 C278 16 285 30 295 30 L440 30 C448 30 452 24 458 24 C464 24 468 30 474 30 L490 30 L495 35 L504 4 L513 48 L520 30 L535 30 C545 30 552 16 565 16 C578 16 585 30 595 30 L600 30'
+  return (
+    <div className={cn('flex items-center gap-3', className)} aria-hidden>
+      <svg viewBox="0 0 600 60" preserveAspectRatio="none" className="flex-1 h-12 min-w-0 overflow-visible">
+        {/* 常显的淡基线：让波形在两次扫掠之间仍可辨认 */}
+        <path d={d} fill="none" stroke="hsl(var(--gold))" strokeWidth="1" opacity="0.22" />
+        <path
+          d={d} fill="none" stroke="hsl(var(--gold))" strokeWidth="1.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          pathLength={1000} className="ecg-line"
+        />
+      </svg>
+      {label && <span className="text-[9px] tracking-[0.3em] font-display text-gold/70 shrink-0 uppercase">{label}</span>}
+    </div>
+  )
+}

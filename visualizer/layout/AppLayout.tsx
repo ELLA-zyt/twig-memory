@@ -23,7 +23,7 @@ function GlobalSearch() {
       <input
         disabled
         placeholder="搜索暂未启用"
-        className="nv-input w-64 lg:w-80 pl-9 pr-4 py-1.5 text-xs disabled:opacity-50"
+        className="nv-input w-40 sm:w-64 lg:w-80 pl-9 pr-4 py-1.5 text-xs disabled:opacity-50"
       />
     </div>
   )
@@ -32,32 +32,33 @@ function GlobalSearch() {
 export default function AppLayout() {
   return (
     <div className="h-screen flex overflow-hidden">
-      {/* ---------- 侧边栏：深松绿 + 描金 ---------- */}
-      <aside className="w-60 shrink-0 flex flex-col relative bg-[hsl(var(--pine))] text-[hsl(44_28%_82%)] border-r border-[hsl(38_52%_55%/0.25)]">
+      {/* ---------- 侧边栏：深松绿 + 描金；窄屏折叠为图标栏 ---------- */}
+      <aside className="w-16 lg:w-60 shrink-0 flex flex-col relative bg-[hsl(var(--pine))] text-[hsl(44_28%_82%)] border-r border-[hsl(38_52%_55%/0.25)]">
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(90% 40% at 50% -5%, hsl(152 32% 24% / 0.65), transparent 70%)' }} />
         {/* 品牌 */}
-        <div className="relative px-5 pt-6 pb-4">
-          <div className="flex items-center gap-3">
+        <div className="relative px-2 lg:px-5 pt-6 pb-4">
+          <div className="flex items-center justify-center lg:justify-start gap-3">
             <TwigMark size={44} />
-            <div className="leading-tight">
+            <div className="leading-tight hidden lg:block">
               <div className="font-display text-xl font-semibold text-[hsl(44_34%_88%)] tracking-wide">衔枝</div>
               <div className="text-[9px] tracking-[0.3em] text-[hsl(38_52%_58%)] font-display mt-0.5">TWIG · 叙事记忆引擎</div>
             </div>
           </div>
-          <div className="mt-4 opacity-50"><VineDivider width={168} /></div>
+          <div className="mt-4 opacity-50 hidden lg:block"><VineDivider width={168} /></div>
         </div>
 
         {/* 导航 */}
-        <div className="relative px-3 mt-1">
-          <div className="px-2 text-[9px] tracking-[0.35em] text-[hsl(44_16%_60%)] mb-2">记忆书 · MEMORY</div>
+        <div className="relative px-2 lg:px-3 mt-1">
+          <div className="px-2 text-[9px] tracking-[0.35em] text-[hsl(44_16%_60%)] mb-2 hidden lg:block">记忆书 · MEMORY</div>
           <nav className="space-y-0.5">
             {NAV.map(({ to, end, label, en, Icon }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={end}
+                title={label}
                 className={({ isActive }) => cn(
-                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition-colors',
+                  'group relative flex items-center justify-center lg:justify-start gap-3 rounded-lg px-2 lg:px-3 py-2.5 text-[13px] transition-colors',
                   isActive
                     ? 'bg-[hsl(44_32%_88%/0.09)] text-[hsl(38_52%_62%)]'
                     : 'text-[hsl(44_22%_74%/0.85)] hover:bg-[hsl(44_32%_88%/0.05)] hover:text-[hsl(44_30%_88%)]',
@@ -70,8 +71,8 @@ export default function AppLayout() {
                       isActive ? 'bg-[hsl(38_52%_58%)]' : 'bg-transparent group-hover:bg-[hsl(44_24%_60%/0.4)]',
                     )} />
                     <Icon size={15} strokeWidth={1.8} className="shrink-0" />
-                    <span className="font-medium">{label}</span>
-                    <span className={cn('ml-auto text-[8px] tracking-[0.18em] font-display', isActive ? 'text-[hsl(38_52%_58%)]' : 'text-[hsl(44_18%_62%/0.75)]')}>{en}</span>
+                    <span className="font-medium hidden lg:inline">{label}</span>
+                    <span className={cn('ml-auto text-[8px] tracking-[0.18em] font-display hidden lg:inline', isActive ? 'text-[hsl(38_52%_58%)]' : 'text-[hsl(44_18%_62%/0.75)]')}>{en}</span>
                   </>
                 )}
               </NavLink>
@@ -90,7 +91,7 @@ export default function AppLayout() {
       {/* ---------- 主区 ---------- */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* 顶栏 */}
-        <div className="h-14 shrink-0 flex items-center gap-4 px-6 border-b border-[hsl(var(--gold)/0.3)] bg-[hsl(44_38%_93%/0.75)] backdrop-blur">
+        <div className="h-14 shrink-0 flex items-center gap-4 px-4 lg:px-6 border-b border-[hsl(var(--gold)/0.3)] bg-[hsl(44_38%_93%/0.75)] backdrop-blur">
           <div className="flex-1 flex justify-center">
             <GlobalSearch />
           </div>
@@ -103,9 +104,11 @@ export default function AppLayout() {
           </div>
         </div>
 
-        {/* 页面内容 */}
+        {/* 页面内容：单点控制最大行宽，宽屏留出负空间 */}
         <main className="flex-1 min-h-0 overflow-y-auto">
-          <Outlet />
+          <div className="mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8 py-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

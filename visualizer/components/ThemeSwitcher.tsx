@@ -11,9 +11,9 @@ export default function ThemeSwitcher() {
   }
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--gold)/0.35)] p-3.5">
-      <div className="text-[9px] tracking-[0.35em] text-[hsl(var(--sidebar-foreground)/0.7)] mb-2.5 font-display uppercase">主题 · Theme</div>
-      <div className="flex items-center gap-2">
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.35)] p-2 lg:p-3.5">
+      <div className="text-[9px] tracking-[0.35em] text-[hsl(var(--sidebar-foreground)/0.7)] mb-2.5 font-display uppercase hidden lg:block">主题 · Theme</div>
+      <div className="flex flex-col lg:flex-row items-center gap-2">
         {THEMES.map(({ key, name, color }) => {
           const active = current === key
           return (
@@ -31,7 +31,7 @@ export default function ThemeSwitcher() {
           )
         })}
       </div>
-      <div className="mt-2 text-[10px] text-[hsl(var(--sidebar-foreground)/0.75)]">
+      <div className="mt-2 text-[10px] text-[hsl(var(--sidebar-foreground)/0.75)] hidden lg:block">
         {THEMES.find((t) => t.key === current)?.name ?? THEMES[0].name}
       </div>
     </div>

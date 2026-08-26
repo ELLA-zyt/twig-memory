@@ -649,3 +649,36 @@
 @keyframes rimSweep {
   to { left: 200%; }
 }
+
+/* ===== 心电描金：描画式扫掠（pathLength 已归一化为 1000） ===== */
+@keyframes pulse-sweep {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.3;
+  }
+}
+
+.ecg-line {
+  stroke-dasharray: 1000;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ecg-line { animation: pulse-sweep 4s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+}
+
+/* 减少动态偏好：停掉装饰性循环动效 */
+@media (prefers-reduced-motion: reduce) {
+  .bead-float,
+  .anim-rise,
+  .anim-fade,
+  .typing-dots span {
+    animation: none !important;
+  }
+}

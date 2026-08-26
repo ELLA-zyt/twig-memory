@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getJournal, generateJournal } from '../../services/api'
-import { SectionTitle } from '../nouveau'
+import { SectionTitle, InkEmpty } from '../nouveau'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
 
@@ -29,7 +29,14 @@ export default function JournalCard() {
         <button onClick={generate} className="nv-chip nv-chip-gold text-[10px]">生成</button>
       </div>
       <div className="mt-3 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-display min-h-[120px]">
-        {content || <span className="text-fog">今日暂无日记</span>}
+        {content || (
+          <InkEmpty
+            compact
+            size={72}
+            quote="暮色尚未沉降，等待第一缕思绪落笔。"
+            hint="日记由引擎基于今日碎片生成"
+          />
+        )}
       </div>
     </div>
   )
