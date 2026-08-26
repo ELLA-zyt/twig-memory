@@ -10,8 +10,12 @@ server/
   store.ts      JSON 文件持久化（每用户一文件，tmp+rename 原子写；可换 SQLite/Postgres）
   manager.ts    多用户引擎管理：按需加载、变更落盘
   llm-node.ts   Node 端直连 Moonshot（注入到 visualizer/engine/llm 的传输层）
+  embed-node.ts 硅基流动嵌入 + 磁盘缓存（碰撞候选向量召回、评测混合检索）
   http.ts       HTTP API（零依赖 node:http）+ 远程 MCP 端点
   mcp.ts        MCP server（stdio，Codex / Claude Code 等可直接挂载）
+  host-loop.ts  参考宿主闭环（/v1/chat）：注入上下文包 → 作答 → 自动 ingest
+  services/     情感层服务：journal / soliloquy / notes / stamps（只读于引擎；
+                用户回应经影子碎片 + ContextAnchor 进入引擎视野）
 ```
 
 ## 快速开始
@@ -34,17 +38,55 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 |---|---|---|
 | POST | `/v1/ingest` | `{ userId, text, title?, tags?[] }` 登记事件并做碰撞判定 |
 | GET | `/v1/context?userId=` | 叙事上下文包，`promptText` 可直接注入宿主 agent 的 system prompt |
-| GET | `/v1/state?userId=` | 完整三层状态（调试/可视化用） |
+| GET | `/v1/state?userId=` | 完整三层状态（调试/可视化用；支持 `page`/`limit` 对碎片分页） |
 | GET | `/v1/claims?userId=` | 认知层论断列表（用户默认全透明可见） |
 | POST | `/v1/contest` | `{ userId, claimId, note }` 用户否决 → contested（不删除、不假改） |
 | POST | `/v1/counter` | `{ userId, claimId, text }` 矛盾响应判定（LLM，需 key） |
 | POST | `/v1/reflect` | `{ userId }` 反刍：认识层抽取/改写 + 反证搜索（异源红队）+ 合成句重生成 + merge/split（LLM，需 key） |
-| POST | `/v1/audit` | `{ userId }` 盲推导审计：null model 基线 + 漂移信号 + 用户可见标记（LLM，需 key） |
+| POST | `/v1/audit` | `{ userId }` 盲推导审计：null model 基线 + 漂移信号 + 用户可见标记（LLM，需 key；结果落盘保留最近 20 条） |
+| GET | `/v1/audit/last?userId=` | 最近一次审计记录（无则 `null`；仪表盘/设置页用） |
+| GET | `/v1/storage` | 数据目录存储占用，按顶层条目聚合（设置页状态仪表用） |
 | POST | `/v1/window` | `{ userId, claimId, days? }` 开启对照窗口（仅 low 风险论断；设计债务⑤） |
 | POST | `/v1/intervene` | `{ userId, claimId?, text }` 宿主上报干预（内生标记，窗口校验时剔除被催生样本） |
 | POST | `/v1/correct` | `{ userId, fragmentId, note }` 事实层本人修正标注：原文不动，追加标注（债务⑥） |
 | POST | `/v1/chat` | `{ userId, text }` 参考宿主闭环：注入叙事上下文包 → 作答 → 代码自动 ingest（`server/host-loop.ts`；会话历史进程内缓冲，不落盘） |
-| GET | `/health` | 服务与判定模式（live / heuristic-only） |
+| GET | `/health` | 服务与判定模式（`llm`: live / heuristic-only；`embed`: vector-recall / dragonvein-only；`auth`: 是否启用令牌） |
+
+### 情感层与新前端 API（日记 / 心迹 / 便签 / 印章）
+
+**情感层只读于引擎**：引擎的 `ingest` / `reflect` 不直接读写 journal/soliloquy/notes/stamps
+目录；用户对便签的回应与盖印经**影子碎片 + ContextAnchor** 进入引擎视野（影子碎片不参与
+碰撞/线索登记/认识抽取/向量召回），设计与数据模型见
+[docs/新前端技术设计文档-v1.0.md](../docs/新前端技术设计文档-v1.0.md)。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/v1/journal?userId=&date=` | 某日日记（缺省今日） |
+| GET | `/v1/journal/range?userId=&from=&to=` | 日期范围内有日记的日子列表（日历用） |
+| POST | `/v1/journal/generate` | `{ userId, date? }` 基于当日碎片与活跃线索生成日记（LLM，需 key；失败不覆盖已有日记） |
+| GET | `/v1/journal/export?userId=&format=` | 导出全部日记，`format=md`（默认，text/markdown）或 `json` |
+| GET | `/v1/soliloquy?userId=&date=` | 某日心迹 |
+| GET | `/v1/soliloquy/recent?userId=&limit=` | 最近心迹（默认 7 条） |
+| GET | `/v1/soliloquy/export?userId=&format=` | 导出全部心迹，格式同上 |
+| GET | `/v1/notes/current?userId=` | 当前应展示便签 + `shouldPopup`（23:00–06:00 未读弹窗信号） |
+| GET | `/v1/notes?userId=&page=&limit=` | 便签历史列表（默认每页 20） |
+| GET | `/v1/notes/:id?userId=` | 单条便签 |
+| POST | `/v1/notes` | `{ userId, content }` 宿主写入便签 |
+| POST | `/v1/notes/generate` | `{ userId, date? }` 基于当日碎片与活跃线索生成便签（LLM，需 key） |
+| POST | `/v1/notes/:id/read` | 标记已读（也接受 PATCH） |
+| POST | `/v1/notes/:id/respond` | `{ userId, text, mood? }` 用户回应：自动建影子碎片（便签原文）+ 回应带 contextAnchor 入引擎 |
+| POST | `/v1/notes/:id/stamp` | `{ userId, type, userNote? }` 盖印：印章候选池选珠 + 影子碎片；一签一章，重复返回 409 |
+| GET | `/v1/stamps?userId=` | 全部盖印记录 + 玻璃珠罐 |
+| GET | `/v1/stamps/recent?userId=&limit=` | 最近 N 条盖印（默认 7，注入上下文用） |
+| GET | `/v1/calendar?userId=&month=YYYY-MM` | 月历标记：哪些日子有日记/心迹/便签/印章 |
+| GET | `/v1/threads/:id/timeline?userId=` | 单条线索生命周期时间线（事件 + 对应碎片） |
+
+印章类型（8 章）与玻璃珠（12 珠）注册表见 `shared/stamps.ts`，前后端共用。
+
+新增可选环境变量（2026-08-23~26）：`MUNINN_TZ`（时区，默认 `Asia/Shanghai`，影响碎片日期
+标签与天数计算）、`MUNINN_CORS_ORIGIN`（CORS 允许源，默认 `*`，生产建议设为具体域名）、
+`MUNINN_RATE_LIMIT`（每用户每分钟请求上限，默认 0 = 不限）、`MUNINN_AUTO_REFLECT=1`
+（进程内定时反刍，仅覆盖已加载用户）+ `MUNINN_REFLECT_INTERVAL_HOURS`（间隔，默认 24）。
 
 ## 远程 MCP（手机 App / 任意 MCP 客户端，无需装依赖）
 
