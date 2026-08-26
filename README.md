@@ -105,12 +105,15 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 
 ## 当前进展
 
-- **服务端接入层已落地**：无头引擎 `HeadlessMuninn`、JSON 持久化、HTTP API、MCP server（stdio + 远程）双接入。
+- **服务端接入层**：无头引擎 `HeadlessMuninn`、JSON 持久化、HTTP API、MCP server（stdio + 远程）双接入。
+- **新前端「记忆书」已上线**：今日扉页 / 记忆书（日历网格 + 日卡导出）/ 故事线 / 理解文档 / 自检日志 / 设置页（引擎状态灯、存储占用、最近审计一览）。
+- **情感层三件套**：日记 / 心迹 / 便签——平行于编织层、只读于引擎；用户回应经影子碎片 + ContextAnchor 进入引擎视野，不污染编织。
+- **印章与玻璃珠**：8 章 × 12 珠的火漆封存仪式（`shared/stamps.ts` 前后端共用注册表），一签一章，盖印生成影子碎片让引擎知道今天的心境。
 - **冲突响应评测**：22/22（100%）。
 - **LoCoMo 事实底盘**：0.640，双口径过线，高于 mem0 参照宏平均。
 - **LongMemEval-S**：Overall 0.856 / Task-averaged 0.844 / Abstention 0.867。
 
-完整评测配置与细节见 [server/README.md](server/README.md)。
+完整评测配置与细节见 [server/README.md](server/README.md)；前端与情感层设计见 [docs/新前端技术设计文档-v1.0.md](docs/新前端技术设计文档-v1.0.md)。
 
 ---
 
@@ -118,8 +121,9 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 
 ```
 twig-memory/
-├── server/        # 核心引擎 + HTTP API + MCP server
-├── visualizer/    # 新前端（记忆书）：今日、记忆书、理解文档、设置
+├── server/        # 核心引擎 + HTTP API + MCP server + 情感层服务
+├── visualizer/    # 新前端「记忆书」：今日扉页 / 记忆书 / 故事线 / 理解文档 / 自检日志 / 设置
+├── shared/        # 前后端共享常量（印章与玻璃珠注册表）
 ├── docs/          # 技术设计文档、合规声明、危机协议
 ├── README.md      # 你正在看的
 └── package.json
@@ -131,6 +135,7 @@ twig-memory/
 
 - [server/README.md](server/README.md) —— API 文档、部署、评测管线
 - [docs/雾尼Muninn-技术设计文档-v1.3.md](docs/雾尼Muninn-技术设计文档-v1.3.md) —— 完整架构与机制论证
+- [docs/新前端技术设计文档-v1.0.md](docs/新前端技术设计文档-v1.0.md) —— 记忆书前端与情感层（日记/心迹/便签/印章）设计
 - [docs/COMPLIANCE.md](docs/COMPLIANCE.md) —— 合规声明（不是医疗设备 / 情感数据最小化）
 - [docs/CRISIS-PROTOCOL.md](docs/CRISIS-PROTOCOL.md) —— 危机协议全文
 - [LICENSE](LICENSE) —— MIT
