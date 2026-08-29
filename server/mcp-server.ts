@@ -126,17 +126,30 @@ export function createMcpServer(manager: EngineManager): McpServer {
   server.registerTool(
     'memory_note_intervention',
     {
-      description: '上报一次你基于某论断对用户采取的干预（内生标记）：如基于「她拖延」提醒了 deadline。被干预催生的行为不算验证该论断的干净证据，对照窗口校验时会剔除干预后 48h 内的样本。',
+      description: '上报一次你基于某论断对用户采取的干预（内生标记）：如基于「她拖延」提醒了 deadline。被干预催生的行为不算验证该论断的干净证据，对照窗口校验时会剔除干预后 48h 内的样本。v0.3.1：evidenceLevel=post_intervention 标记触达引擎产生的干预（reflect 会对干预前后窗口内的碎片做权重降级，防自强化回路）；outcome=user_engaged 且带 claimId 时消费对应 remention 邀请（不再重复注入上下文）。',
       inputSchema: {
         userId: z.string().describe('用户标识'),
         claimId: z.string().optional().describe('相关论断 ID（如有）'),
         text: z.string().describe('干预内容描述（做了什么）'),
+        outcome: z.enum(['user_ignored', 'user_engaged', 'user_resolved', 'user_contested']).optional()
+          .describe('用户对该干预的回应：user_ignored=未回应 / user_engaged=回应了内容（消费再提邀请）/ user_resolved=表示问题已解决 / user_contested=提出异议'),
+        evidenceLevel: z.enum(['pre_intervention', 'post_intervention']).optional()
+          .describe('证据层级：post_intervention = 触达引擎产生的干预（其前后窗口内碎片在 reflect 中权重降级）；缺省视为宿主基于认识层的主动干预（pre_intervention）'),
       },
     },
-    async ({ userId, claimId, text }) => {
-      const ok = manager.get(userId).noteIntervention(claimId, text)
+    async ({ userId, claimId, text, outcome, evidenceLevel }) => {
+      const engine = manager.get(userId)
+      const ok = engine.noteIntervention(claimId, text, outcome, evidenceLevel)
       manager.persist(userId)
-      return { content: [{ type: 'text', text: ok ? '干预已记录（内生标记）' : '记录失败' }] }
+      if (!ok) return { content: [{ type: 'text', text: '记录失败' }] }
+      // v0.3.1 消费反馈：user_engaged + claimId 命中邀请时告知调用方，便于宿主闭环确认
+      let redeemed = ''
+      if (outcome === 'user_engaged' && claimId) {
+        const inv = engine.getState().claims.find((c) => c.id === claimId)?.rementionInvitation
+        if (inv?.status === 'redeemed') redeemed = '；对应 remention 邀请已兑现（redeemed），后续上下文不再注入'
+      }
+      const meta = [outcome && `outcome=${outcome}`, evidenceLevel && `evidenceLevel=${evidenceLevel}`].filter(Boolean).join('，')
+      return { content: [{ type: 'text', text: `干预已记录（内生标记${meta ? `：${meta}` : ''}）${redeemed}` }] }
     },
   )
 

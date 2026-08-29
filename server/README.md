@@ -157,6 +157,10 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
    `memory_note_intervention` 上报一次（内生标记）；可为 low 风险论断开
    `memory_start_window` 对照窗口——窗口期内 `promptText` 会指示你**不要**基于
    该论断干预，窗口到期由 reflect 自动校验（详见下节）。
+   v0.3.1：触达引擎产生的干预请带 `evidenceLevel=post_intervention`（其前后
+   窗口内的碎片会在 reflect 中权重降级，防自强化回路）；用户回应了再提邀请后
+   补报 `outcome=user_engaged`（带 claimId），对应邀请即被消费、不再重复注入
+   上下文（`outcome` 还支持 `user_ignored` / `user_resolved` / `user_contested`）。
 
 ## 行为要点（SILENT 池，§4.5）
 
