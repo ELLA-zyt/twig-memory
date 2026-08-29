@@ -47,7 +47,7 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 | GET | `/v1/audit/last?userId=` | 最近一次审计记录（无则 `null`；仪表盘/设置页用） |
 | GET | `/v1/storage` | 数据目录存储占用，按顶层条目聚合（设置页状态仪表用） |
 | POST | `/v1/window` | `{ userId, claimId, days? }` 开启对照窗口（仅 low 风险论断；设计债务⑤） |
-| POST | `/v1/intervene` | `{ userId, claimId?, text }` 宿主上报干预（内生标记，窗口校验时剔除被催生样本） |
+| POST | `/v1/intervene` | `{ userId, claimId?, text, outcome?, evidenceLevel? }` 宿主上报干预（内生标记，窗口校验时剔除被催生样本；v0.3.1：`outcome=user_engaged` + `claimId` 消费对应 remention 邀请，`evidenceLevel=post_intervention` 触发 reflect 中的碎片权重降级） |
 | POST | `/v1/correct` | `{ userId, fragmentId, note }` 事实层本人修正标注：原文不动，追加标注（债务⑥） |
 | POST | `/v1/chat` | `{ userId, text }` 参考宿主闭环：注入叙事上下文包 → 作答 → 代码自动 ingest（`server/host-loop.ts`；会话历史进程内缓冲，不落盘） |
 | GET | `/health` | 服务与判定模式（`llm`: live / heuristic-only；`embed`: vector-recall / dragonvein-only；`auth`: 是否启用令牌） |

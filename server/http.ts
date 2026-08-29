@@ -13,7 +13,7 @@
  *   GET  /v1/audit/last?userId= : 最近一次审计记录（无则 null）
  *   GET  /v1/storage           : 数据目录存储占用（按顶层条目聚合）
  *   POST /v1/window { userId, claimId, days? } : 开启对照窗口（仅 low 风险论断，设计债务⑤）
- *   POST /v1/intervene { userId, claimId?, text } : 宿主上报干预（内生标记，窗口校验剔除）
+ *   POST /v1/intervene { userId, claimId?, text, outcome?, evidenceLevel? } : 宿主上报干预（内生标记，窗口校验剔除；v0.3.1 outcome=user_engaged 消费 remention 邀请）
  *   POST /v1/correct { userId, fragmentId, note } : 事实层本人修正标注（不改原文，债务⑥）
  *   POST /v1/chat   { userId, text } : 参考宿主闭环（host-loop）：注入上下文包 → 作答 → 自动 ingest
  *
@@ -301,7 +301,13 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
       if (!uid || !body.text) return send(res, 400, { error: 'userId 和 text 必填' })
-      manager.get(uid).noteIntervention(body.claimId ? String(body.claimId) : undefined, String(body.text))
+      // v0.3.1：新增可选 outcome / evidenceLevel（旧请求体不传时行为不变）
+      manager.get(uid).noteIntervention(
+        body.claimId ? String(body.claimId) : undefined,
+        String(body.text),
+        body.outcome ? String(body.outcome) : undefined,
+        body.evidenceLevel ? String(body.evidenceLevel) : undefined,
+      )
       manager.persist(uid)
       return send(res, 200, { ok: true })
     }

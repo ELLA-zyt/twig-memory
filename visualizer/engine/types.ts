@@ -143,8 +143,10 @@ export interface Claim {
   lastVetoedAt?: string
   /** 否决时的证据快照（累积）：同一批旧证据不得单独支撑再提或重新生成（防打地鼠） */
   vetoedEvidenceIds?: FragmentId[]
-  /** 再提邀请（达门槛后生成；宿主以邀请式措辞在对话中提出，再被否决即永久封存） */
-  rementionInvitation?: { at: string; text: string; newEvidenceIds: FragmentId[] }
+  /** 再提邀请（达门槛后生成；宿主以邀请式措辞在对话中提出，再被否决即永久封存）
+   *  status（v0.3.1）：undefined = pending（旧数据兼容）；redeemed = 宿主已兑现（intervene 上报 user_engaged 后由消费机制标记，
+   *  getContextPacket 过滤不再注入）；expired 不落状态——由注入处的 age <= 30 天判断 */
+  rementionInvitation?: { at: string; text: string; newEvidenceIds: FragmentId[]; status?: 'pending' | 'redeemed' | 'expired' }
 }
 
 /* ---------------- 引擎日志 ---------------- */

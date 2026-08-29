@@ -60,9 +60,12 @@ const VETO_SEAL_COUNT = 2
 /**
  * 碎片视图（判定层统一入口）：本人修正标注（债务⑥）拼进正文——判定看得到修正后的事实，
  * 原文永不改动。所有 LLM 判定函数的碎片入参都从这里出。
+ * v0.3.1：可选 sourceTag 以自然语言标记拼入正文（如 post-intervention 权重降级标记），
+ * LLM 在 synthesizeClaims 时自然读取并自行降权——零额外 prompt 工程，不传时行为不变。
  */
-export function fragView(f: Fragment): { id: string; date: string; title: string; body: string; arousal: number; correctionAt?: string; contextAnchor?: ContextAnchorInput } {
-  const body = f.correction ? `${f.body}〔本人修正：${f.correction.note}〕` : f.body
+export function fragView(f: Fragment, sourceTag?: string): { id: string; date: string; title: string; body: string; arousal: number; correctionAt?: string; contextAnchor?: ContextAnchorInput } {
+  let body = f.correction ? `${f.body}〔本人修正：${f.correction.note}〕` : f.body
+  if (sourceTag) body = `${body}〔${sourceTag}〕`
   return {
     id: f.id,
     date: f.dateLabel,
@@ -134,6 +137,10 @@ export interface InterventionRecord {
   at: string
   claimId?: string
   text: string
+  /** v0.3.1 触达语义：用户对该干预的回应（user_engaged 兼作 remention 邀请的消费信号） */
+  outcome?: 'user_ignored' | 'user_engaged' | 'user_resolved' | 'user_contested'
+  /** v0.3.1 证据层级：post_intervention = 触达引擎产生的干预，其前后窗口内的碎片在 reflect 中权重降级（防自强化回路） */
+  evidenceLevel?: 'pre_intervention' | 'post_intervention'
 }
 
 /** 盲推导审计记录（§5.2 渐进漂移对策 · 设计债务④ null model） */
@@ -703,7 +710,19 @@ export class HeadlessMuninn {
 
     // —— 认识层抽取（§5.1 改写式：证据锚定 + 边界条件 + 去定性化）——
     try {
-      const recent = this.state.fragments.filter((f) => !f.shadow).slice(0, 40).map(fragView)
+      // v0.3.1 自强化回路防御：post-intervention 干预前 24h ~ 干预后 48h 内的碎片打降级标记，
+      // 前 24h 覆盖触达前可能被引导的样本，后 48h 覆盖触达后用户的回应——系统催生的证据不算独立佐证
+      const postInterventionPeriods = (this.state.interventions ?? [])
+        .filter((i) => i.evidenceLevel === 'post_intervention')
+        .map((i) => ({
+          start: new Date(i.at).getTime() - 86400000,
+          end: new Date(i.at).getTime() + 2 * 86400000,
+        }))
+      const recent = this.state.fragments.filter((f) => !f.shadow).slice(0, 40).map((f) => {
+        const fd = new Date(f.dateLabel).getTime()
+        const isPost = postInterventionPeriods.some((p) => !Number.isNaN(fd) && fd >= p.start && fd <= p.end)
+        return fragView(f, isPost ? 'post-intervention 证据：权重降级' : undefined)
+      })
       const claims = this.state.claims
         .filter((c) => c.status === 'active')
         .map((c) => ({ id: c.id, text: c.text, conviction: c.conviction, counterCount: c.counterEvidence.length }))
@@ -1035,9 +1054,24 @@ export class HeadlessMuninn {
     }
   }
 
-  /** 宿主上报一次基于论断的干预（内生标记 §5.3 之二）：窗口校验时剔除被催生的样本 */
-  noteIntervention(claimId: string | undefined, text: string): boolean {
-    this.state.interventions = [{ at: new Date().toISOString(), claimId, text }, ...(this.state.interventions ?? [])].slice(0, 50)
+  /** 宿主上报一次基于论断的干预（内生标记 §5.3 之二）：窗口校验时剔除被催生的样本。
+   *  v0.3.1：支持 outcome / evidenceLevel；outcome=user_engaged 且带 claimId 时消费对应 remention 邀请（REDEEMED） */
+  noteIntervention(claimId: string | undefined, text: string, outcome?: string, evidenceLevel?: string): boolean {
+    this.state.interventions = [{
+      at: new Date().toISOString(),
+      claimId,
+      text,
+      outcome: outcome as InterventionRecord['outcome'],
+      evidenceLevel: evidenceLevel as InterventionRecord['evidenceLevel'],
+    }, ...(this.state.interventions ?? [])].slice(0, 50)
+
+    // remention 消费机制：宿主上报用户已回应（user_engaged）→ 邀请标记为已兑现，
+    // 后续 getContextPacket 自动过滤，不再重复注入；claim 无邀请时静默跳过
+    if (outcome === 'user_engaged' && claimId) {
+      const claim = this.state.claims.find((c) => c.id === claimId)
+      if (claim?.rementionInvitation) claim.rementionInvitation.status = 'redeemed'
+    }
+
     this.dirty = true
     return true
   }
@@ -1352,8 +1386,10 @@ export class HeadlessMuninn {
 
     // 再提邀请（§5.4 债务⑦）：达门槛的 contested 观察，以邀请式措辞交宿主在合适时机提出
     // P2-4 修复：邀请 30 天后过期，不再注入上下文（防纠缠的反面——用户长期不回应就该停止提示）
+    // v0.3.1：status=redeemed（宿主上报 user_engaged 消费）的邀请不再注入；旧数据无 status 按 pending 处理
     const rementions = this.state.claims.filter((c) => {
       if (c.status !== 'contested' || !c.rementionInvitation) return false
+      if (c.rementionInvitation.status === 'redeemed') return false
       const age = daysBetween(c.rementionInvitation.at.slice(0, 10), today)
       return age <= 30
     })
