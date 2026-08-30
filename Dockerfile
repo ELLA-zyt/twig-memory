@@ -8,11 +8,15 @@ RUN npm ci --ignore-scripts
 
 COPY . .
 
-# 写入构建时的环境变量（Vite 构建时会读取 .env.production）
+# 构建环境变量：API 走同域相对路径，默认用户 muqiu
 RUN echo "VITE_API_BASE=" > .env.production && \
-    echo "VITE_USER_ID=muqiu" >> .env.production
+    echo "VITE_USER_ID=muqiu" >> .env.production && \
+    echo "BUILD_TIME=$(date +%s)" >> .env.production
 
 RUN npm run build
+
+# 验证构建产物
+RUN ls -la dist/ && ls -la dist/assets/
 
 # 阶段二：服务端运行镜像
 FROM node:22-alpine

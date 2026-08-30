@@ -3,8 +3,8 @@
  * 默认连接本地 server/http.ts 的 http://localhost:7300
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:7300'
-const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || ''
+const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'muqiu'
 
 async function fetchJson<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, {
