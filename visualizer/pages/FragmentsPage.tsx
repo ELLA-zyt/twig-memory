@@ -3,8 +3,6 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { PageHead } from '../components/nouveau'
 import { getState, type MuninnState } from '../services/api'
 
-const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
-
 export default function FragmentsPage() {
   const [state, setState] = useState<MuninnState | null>(null)
   const [loading, setLoading] = useState(true)
@@ -12,7 +10,7 @@ export default function FragmentsPage() {
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
-    getState(USER_ID).then((s) => {
+    getState().then((s) => {
       setState(s)
       setLoading(false)
     })
@@ -25,7 +23,6 @@ export default function FragmentsPage() {
     body: string
     threadIds?: string[]
     tags?: string[]
-    vad?: { valence: number; arousal: number; dominance: number }
   }
   const fragments: Fragment[] = (state?.fragments ?? []) as Fragment[]
   const filtered = filter
