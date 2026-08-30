@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router'
 import {
-  Calendar, FileText, GitBranch, RefreshCw, Scale, Search, Settings, Sparkles,
+  Calendar, FileText, GitBranch, Layers, RefreshCw, Scale, Search, Settings, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TwigMark, VineDivider } from '../components/nouveau'
@@ -10,6 +10,7 @@ const NAV = [
   { to: '/', end: true, label: '今日', en: 'TODAY', Icon: Sparkles },
   { to: '/book', label: '记忆书', en: 'BOOK', Icon: Calendar },
   { to: '/day', label: '日卡', en: 'DAY CARD', Icon: FileText },
+  { to: '/fragments', label: '碎片层', en: 'FRAGMENTS', Icon: Layers },
   { to: '/threads', label: '线索层', en: 'THREADS', Icon: GitBranch },
   { to: '/claims', label: '理解文档', en: 'CLAIMS', Icon: Scale },
   { to: '/audit', label: '自检日志', en: 'AUDIT', Icon: RefreshCw },

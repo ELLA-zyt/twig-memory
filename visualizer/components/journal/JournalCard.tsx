@@ -25,7 +25,7 @@ export default function JournalCard() {
   return (
     <div className="nv-card nv-card-double p-5">
       <div className="flex items-center justify-between">
-        <SectionTitle className="mb-0">今日日记 · Journal</SectionTitle>
+        <div><SectionTitle className="mb-0">今日日记 · Journal</SectionTitle><div className="text-[9px] text-fog mt-0.5">AI 基于记忆碎片生成 · 仅供参考</div></div>
         <button onClick={generate} className="nv-chip nv-chip-gold text-[10px]">生成</button>
       </div>
       <div className="mt-3 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-display min-h-[120px]">

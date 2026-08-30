@@ -11,6 +11,7 @@ import ThreadsPage from './pages/ThreadsPage'
 import ThreadDetailPage from './pages/ThreadDetailPage'
 import AuditPage from './pages/AuditPage'
 import DayCardPage from './pages/DayCardPage'
+import FragmentsPage from './pages/FragmentsPage'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
             <Route index element={<TodayPage />} />
             <Route path="book" element={<BookPage />} />
             <Route path="day" element={<DayCardPage />} />
+            <Route path="fragments" element={<FragmentsPage />} />
             <Route path="threads" element={<ThreadsPage />} />
             <Route path="threads/:id" element={<ThreadDetailPage />} />
             <Route path="claims" element={<ClaimsPage />} />

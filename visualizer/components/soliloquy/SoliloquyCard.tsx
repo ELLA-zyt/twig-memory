@@ -13,7 +13,7 @@ export default function SoliloquyCard() {
 
   return (
     <div className="nv-card nv-card-double p-5">
-      <SectionTitle>今日心迹 · Soliloquy</SectionTitle>
+      <div><SectionTitle className="mb-0">今日心迹 · Soliloquy</SectionTitle><div className="text-[9px] text-fog mt-0.5">AI 基于记忆碎片生成 · 仅供参考</div></div>
       <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-display min-h-[80px]">
         {content || (
           <InkEmpty
