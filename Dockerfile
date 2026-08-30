@@ -1,5 +1,21 @@
-# 雾尼 Muninn 记忆后端（server/only，前端 demo 不参与部署）
-# Zeabur 检测到 Dockerfile 后会自动构建；平台注入的 PORT 环境变量会被 http.ts 读取。
+# 衔枝 Twig · 记忆引擎 —— 服务端 + 前端一体化部署
+# 阶段一：构建前端
+FROM node:22-alpine AS frontend-builder
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+COPY visualizer ./visualizer
+COPY shared ./shared
+COPY vite.config.ts tsconfig.json tsconfig.app.json ./
+# 如果项目在根目录构建（npm run build），需要全部源码
+COPY . .
+
+ENV VITE_API_BASE=
+RUN npm run build
+
+# 阶段二：服务端运行镜像
 FROM node:22-alpine
 
 WORKDIR /app
@@ -7,15 +23,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-# 服务端只依赖 visualizer/engine（类型 + LLM 判定函数），不拷贝整个前端
 COPY visualizer/engine ./visualizer/engine
 COPY shared ./shared
 COPY server ./server
+# 把前端构建产物复制到 public/ 目录，服务端 http.ts 会静态托管
+COPY --from=frontend-builder /build/dist ./public
 
 ENV NODE_ENV=production
 ENV MUNINN_DATA_DIR=/data
 
-# P2-12：不以 root 运行
 USER node
 
 EXPOSE 7300

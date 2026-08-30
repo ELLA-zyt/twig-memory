@@ -44,7 +44,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -575,6 +575,55 @@ const server = createServer(async (req, res) => {
         return { day: h.day, note: h.note, fragment: f ? { id: f.id, title: f.title, body: f.body } : null }
       })
       return send(res, 200, { thread, events })
+    }
+
+    /* ---------- 前端静态文件服务（记忆书 / 日记 / 便签 等页面） ---------- */
+
+    if (req.method === 'GET' && !url.pathname.startsWith('/v1/') && url.pathname !== '/mcp' && url.pathname !== '/sse') {
+      const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
+      const reqPath = url.pathname === '/' ? '/index.html' : url.pathname
+      let filePath = join(publicDir, reqPath)
+
+      // 防止路径穿越
+      if (!filePath.startsWith(publicDir)) {
+        return send(res, 403, { error: 'forbidden' })
+      }
+
+      if (existsSync(filePath) && statSync(filePath).isFile()) {
+        const ext = extname(filePath).toLowerCase()
+        const mimeMap: Record<string, string> = {
+          '.html': 'text/html; charset=utf-8',
+          '.js': 'application/javascript; charset=utf-8',
+          '.css': 'text/css; charset=utf-8',
+          '.json': 'application/json; charset=utf-8',
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon',
+          '.woff': 'font/woff',
+          '.woff2': 'font/woff2',
+          '.ttf': 'font/ttf',
+          '.map': 'application/json; charset=utf-8',
+          '.txt': 'text/plain; charset=utf-8',
+        }
+        const contentType = mimeMap[ext] || 'application/octet-stream'
+        res.writeHead(200, { 'Content-Type': contentType })
+        res.end(readFileSync(filePath))
+        return
+      }
+
+      // SPA fallback：不是 /v1/* 的 404 都返回 index.html，让前端路由接管
+      const indexPath = join(publicDir, 'index.html')
+      if (existsSync(indexPath)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end(readFileSync(indexPath))
+        return
+      }
+
+      // public 目录不存在（dev 模式），返回 404
+      return send(res, 404, { error: 'not found' })
     }
 
     return send(res, 404, { error: 'not found' })
