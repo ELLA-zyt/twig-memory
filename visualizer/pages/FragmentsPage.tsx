@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { FileText, ChevronDown, ChevronUp } from 'lucide-react'
-import { PageHead, SectionTitle } from '../components/nouveau'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { PageHead } from '../components/nouveau'
 import { getState, type MuninnState } from '../services/api'
 
 const USER_ID = (import.meta.env.VITE_USER_ID as string) || 'default'
@@ -18,7 +18,16 @@ export default function FragmentsPage() {
     })
   }, [])
 
-  const fragments = state?.fragments ?? []
+  interface Fragment {
+    id: string
+    dateLabel: string
+    title: string
+    body: string
+    threadIds?: string[]
+    tags?: string[]
+    vad?: { valence: number; arousal: number; dominance: number }
+  }
+  const fragments: Fragment[] = (state?.fragments ?? []) as Fragment[]
   const filtered = filter
     ? fragments.filter(
         (f) =>
