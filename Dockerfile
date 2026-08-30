@@ -8,8 +8,10 @@ RUN npm ci --ignore-scripts
 
 COPY . .
 
-ENV VITE_API_BASE=
-ENV VITE_USER_ID=muqiu
+# 写入构建时的环境变量（Vite 构建时会读取 .env.production）
+RUN echo "VITE_API_BASE=" > .env.production && \
+    echo "VITE_USER_ID=muqiu" >> .env.production
+
 RUN npm run build
 
 # 阶段二：服务端运行镜像
