@@ -6,13 +6,10 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-COPY visualizer ./visualizer
-COPY shared ./shared
-COPY vite.config.ts tsconfig.json tsconfig.app.json ./
-# 如果项目在根目录构建（npm run build），需要全部源码
 COPY . .
 
 ENV VITE_API_BASE=
+ENV VITE_USER_ID=muqiu
 RUN npm run build
 
 # 阶段二：服务端运行镜像
