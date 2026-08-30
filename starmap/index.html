@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>衔枝 · 记忆星空</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a1a; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #e8e4d9; }
+  canvas { display: block; position: absolute; top: 0; left: 0; }
+
+  /* 顶部标题 */
+  .title {
+    position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none; z-index: 10;
+  }
+  .title h1 { font-size: 22px; font-weight: 300; letter-spacing: 8px; color: #d4c5a0; text-shadow: 0 0 20px rgba(212,197,160,0.3); }
+  .title p { font-size: 11px; letter-spacing: 4px; color: #7a7a9a; margin-top: 6px; }
+
+  /* 底部统计 */
+  .stats {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 32px; font-size: 12px; color: #8a8aaa; z-index: 10;
+  }
+  .stats span b { color: #d4c5a0; font-weight: 400; font-size: 14px; margin-right: 4px; }
+
+  /* 配置面板 */
+  .config {
+    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; align-items: center; z-index: 10;
+    background: rgba(20,20,40,0.6); padding: 8px 14px; border-radius: 20px;
+    backdrop-filter: blur(10px); border: 1px solid rgba(212,197,160,0.15);
+  }
+  .config input {
+    background: transparent; border: none; outline: none;
+    color: #e8e4d9; font-size: 12px; width: 120px;
+    border-bottom: 1px solid rgba(212,197,160,0.2); padding: 2px 4px;
+  }
+  .config input::placeholder { color: #5a5a7a; }
+  .config button {
+    background: rgba(212,197,160,0.15); border: 1px solid rgba(212,197,160,0.3);
+    color: #d4c5a0; padding: 4px 12px; border-radius: 12px;
+    font-size: 11px; cursor: pointer; transition: all 0.2s;
+  }
+  .config button:hover { background: rgba(212,197,160,0.25); }
+
+  /* 信息面板 */
+  .info-panel {
+    position: absolute; top: 50%; right: 40px; transform: translateY(-50%);
+    width: 320px; max-height: 70vh; overflow-y: auto;
+    background: rgba(15,15,35,0.85); backdrop-filter: blur(12px);
+    border: 1px solid rgba(212,197,160,0.2); border-radius: 12px;
+    padding: 24px; z-index: 20; opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .info-panel.show { opacity: 1; pointer-events: auto; }
+  .info-panel .close {
+    position: absolute; top: 12px; right: 16px;
+    color: #7a7a9a; cursor: pointer; font-size: 18px;
+  }
+  .info-panel .kicker { font-size: 10px; letter-spacing: 3px; color: #8a7a5a; margin-bottom: 8px; }
+  .info-panel h2 { font-size: 18px; font-weight: 400; color: #d4c5a0; margin-bottom: 12px; }
+  .info-panel .date { font-size: 11px; color: #6a6a8a; margin-bottom: 14px; }
+  .info-panel .body { font-size: 13px; line-height: 1.8; color: #c0bca8; white-space: pre-wrap; }
+  .info-panel .tags { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .info-panel .tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(212,197,160,0.1); color: #b0a080;
+    border: 1px solid rgba(212,197,160,0.2);
+  }
+  .info-panel .threads { margin-top: 12px; font-size: 11px; color: #6a6a8a; }
+  .info-panel .conviction { margin-top: 12px; font-size: 11px; color: #8a7a5a; }
+  .info-panel .conviction-bar {
+    width: 100%; height: 3px; background: rgba(212,197,160,0.1);
+    border-radius: 2px; margin-top: 6px; overflow: hidden;
+  }
+  .info-panel .conviction-fill {
+    height: 100%; background: linear-gradient(90deg, #d4c5a0, #f0e6c8);
+    border-radius: 2px;
+  }
+
+  /* 图例 */
+  .legend {
+    position: absolute; top: 28px; right: 28px; z-index: 10;
+    font-size: 11px; color: #7a7a9a; text-align: right;
+  }
+  .legend .item { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 6px; }
+  .legend .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend .dot.fragment { background: #a0a0c0; box-shadow: 0 0 6px #a0a0c0; }
+  .legend .dot.thread { background: #7ac5a0; box-shadow: 0 0 6px #7ac5a0; }
+  .legend .dot.claim { background: #f0d890; box-shadow: 0 0 10px #f0d890; }
+
+  /* 加载 */
+  .loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 13px; color: #6a6a8a; letter-spacing: 2px; z-index: 5;
+  }
+
+  @media (max-width: 768px) {
+    .info-panel { right: 10px; left: 10px; width: auto; transform: translateY(-50%); }
+    .stats { gap: 16px; font-size: 10px; }
+    .config input { width: 80px; }
+    .legend { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="sky"></canvas>
+
+<div class="title">
+  <h1>记忆星空</h1>
+  <p>TWIG · STARMAP</p>
+</div>
+
+<div class="legend">
+  <div class="item"><span>记忆碎片</span><span class="dot fragment"></span></div>
+  <div class="item"><span>线索星座</span><span class="dot thread"></span></div>
+  <div class="item"><span>认知亮星</span><span class="dot claim"></span></div>
+</div>
+
+<div class="loading" id="loading">星图正在绘制…</div>
+
+<div class="stats" id="stats" style="display:none">
+  <span><b id="countFragments">0</b>碎片</span>
+  <span><b id="countThreads">0</b>线索</span>
+  <span><b id="countClaims">0</b>认知</span>
+</div>
+
+<div class="config">
+  <input type="text" id="userIdInput" placeholder="userId" value="muqiu" />
+  <input type="text" id="tokenInput" placeholder="auth token（可选）" />
+  <button onclick="loadData()">刷新</button>
+</div>
+
+<div class="info-panel" id="infoPanel">
+  <span class="close" onclick="closePanel()">×</span>
+  <div class="kicker" id="infoKicker">FRAGMENT</div>
+  <h2 id="infoTitle">标题</h2>
+  <div class="date" id="infoDate"></div>
+  <div class="body" id="infoBody"></div>
+  <div class="tags" id="infoTags"></div>
+  <div class="threads" id="infoThreads"></div>
+  <div class="conviction" id="infoConviction" style="display:none">
+    置信度
+    <div class="conviction-bar"><div class="conviction-fill" id="convictionFill"></div></div>
+  </div>
+</div>
+
+<script>
+// ===== 配置 =====
+const API_BASE = ''; // 走同域
+let userId = 'muqiu';
+let authToken = '';
+
+// ===== Canvas 初始化 =====
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ===== 数据 =====
+let fragments = [];
+let threads = [];
+let claims = [];
+let stars = []; // 渲染用的星星数组
+let threadStars = []; // 线索星座
+let claimStars = []; // 认知亮星
+
+// ===== 工具函数 =====
+function fetchJson(url, opts) {
+  const headers = { 'Content-Type': 'application/json', ...(opts?.headers || {}) };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  return fetch(url, { ...opts, headers }).then(r => {
+    if (!r.ok) throw new Error(r.statusText);
+    return r.json();
+  });
+}
+
+// 获取 API base（优先用当前域名，没有的话用 localStorage 存的）
+function getApiBase() {
+  // 如果是 file:// 或本地调试，用 localStorage
+  if (location.protocol === 'file:') {
+    return localStorage.getItem('twig_api_base') || 'https://yubai-memory.zeabur.app';
+  }
+  return ''; // 同域
+}
+
+// ===== 加载数据 =====
+function loadData() {
+  userId = document.getElementById('userIdInput').value || 'muqiu';
+  authToken = document.getElementById('tokenInput').value || '';
+  localStorage.setItem('twig_user_id', userId);
+  if (authToken) localStorage.setItem('twig_auth_token', authToken);
+
+  document.getElementById('loading').style.display = 'block';
+
+  const base = getApiBase();
+  fetchJson(`${base}/v1/state?userId=${encodeURIComponent(userId)}`)
+    .then(data => {
+      fragments = data.fragments || [];
+      threads = data.threads || [];
+      claims = data.claims || [];
+      buildStars();
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('stats').style.display = 'flex';
+      document.getElementById('countFragments').textContent = fragments.length;
+      document.getElementById('countThreads').textContent = threads.length;
+      document.getElementById('countClaims').textContent = claims.length;
+    })
+    .catch(err => {
+      document.getElementById('loading').textContent = '加载失败：' + err.message + '（请检查 token 或 userId）';
+    });
+}
+
+// ===== 构建星星位置 =====
+function buildStars() {
+  stars = [];
+  threadStars = [];
+  claimStars = [];
+
+  const cx = W / 2;
+  const cy = H / 2;
+
+  // 碎片星：分布在整个天球（投影到2D）
+  // 使用球面坐标投影，营造立体星空感
+  fragments.forEach((f, i) => {
+    // 均匀分布在球面上
+    const phi = Math.acos(-1 + (2 * i) / fragments.length);
+    const theta = Math.sqrt(fragments.length * Math.PI) * phi;
+    const r = Math.min(W, H) * 0.35 + Math.random() * 40;
+
+    // 投影到2D
+    const x = cx + r * Math.sin(phi) * Math.cos(theta);
+    const y = cy + r * Math.sin(phi) * Math.sin(theta) * 0.8; // 压扁一点
+    const z = r * Math.cos(phi); // 深度
+
+    stars.push({
+      id: f.id,
+      type: 'fragment',
+      data: f,
+      x, y, z,
+      baseSize: 1.2 + Math.random() * 0.8,
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.01 + Math.random() * 0.02,
+      brightness: 0.4 + Math.random() * 0.4,
+    });
+  });
+
+  // 线索星座：核心星 + 连线
+  threads.forEach((t, ti) => {
+    const phi = (ti / threads.length) * Math.PI * 2 + Math.random() * 0.3;
+    const r = Math.min(W, H) * 0.25 + ti * 20;
+    const x = cx + r * Math.cos(phi);
+    const y = cy + r * Math.sin(phi) * 0.75;
+
+    const coreStar = {
+      id: t.id,
+      type: 'thread',
+      data: t,
+      x, y, z: 0,
+      baseSize: 2.5,
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.015,
+      brightness: 0.8,
+      memberStars: [],
+    };
+
+    // 关联的碎片星作为成员
+    if (t.history && t.history.length > 0) {
+      t.history.forEach((h, hi) => {
+        // 在核心星周围找对应的碎片星 或 生成成员星位置
+        const angle = (hi / t.history.length) * Math.PI * 2 + phi;
+        const dist = 30 + Math.random() * 50;
+        const mx = x + Math.cos(angle) * dist;
+        const my = y + Math.sin(angle) * dist * 0.8;
+
+        coreStar.memberStars.push({ x: mx, y: my, fragmentId: h.fragmentId });
+      });
+    }
+
+    threadStars.push(coreStar);
+  });
+
+  // 认知亮星：更大 更亮 位置偏外围
+  claims.forEach((c, ci) => {
+    const angle = (ci / Math.max(claims.length, 1)) * Math.PI * 2 + 0.5;
+    const r = Math.min(W, H) * 0.42 + ci * 15;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle) * 0.75;
+
+    claimStars.push({
+      id: c.id,
+      type: 'claim',
+      data: c,
+      x, y, z: -10,
+      baseSize: 4 + c.conviction * 2,
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.008,
+      brightness: 0.9 + c.conviction * 0.1,
+      conviction: c.conviction,
+    });
+  });
+}
+
+// ===== 渲染 =====
+let rotation = 0;
+let mouseX = 0, mouseY = 0;
+let hoveredStar = null;
+
+document.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  checkHover();
+});
+
+function checkHover() {
+  hoveredStar = null;
+
+  // 检查认知亮星（优先，因为大）
+  for (let i = claimStars.length - 1; i >= 0; i--) {
+    const s = claimStars[i];
+    const dx = mouseX - s.x;
+    const dy = mouseY - s.y;
+    if (dx * dx + dy * dy < 225) {
+      hoveredStar = s;
+      canvas.style.cursor = 'pointer';
+      return;
+    }
+  }
+
+  // 检查线索星
+  for (let i = threadStars.length - 1; i >= 0; i--) {
+    const s = threadStars[i];
+    const dx = mouseX - s.x;
+    const dy = mouseY - s.y;
+    if (dx * dx + dy * dy < 100) {
+      hoveredStar = s;
+      canvas.style.cursor = 'pointer';
+      return;
+    }
+  }
+
+  // 检查碎片星
+  for (let i = stars.length - 1; i >= 0; i--) {
+    const s = stars[i];
+    const dx = mouseX - s.x;
+    const dy = mouseY - s.y;
+    if (dx * dx + dy * dy < 36) {
+      hoveredStar = s;
+      canvas.style.cursor = 'pointer';
+      return;
+    }
+  }
+
+  canvas.style.cursor = 'default';
+}
+
+canvas.addEventListener('click', () => {
+  if (hoveredStar) {
+    showPanel(hoveredStar);
+  }
+});
+
+function drawStar(x, y, size, brightness, color) {
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = brightness;
+  ctx.fill();
+
+  // 光晕
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
+  gradient.addColorStop(0, color.replace(')', `, ${brightness * 0.3})`).replace('rgb', 'rgba'));
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(x, y, size * 4, 0, Math.PI * 2);
+  ctx.fillStyle = gradient;
+  ctx.globalAlpha = brightness * 0.5;
+  ctx.fill();
+
+  ctx.globalAlpha = 1;
+}
+
+function render() {
+  // 背景渐变
+  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H) * 0.7);
+  bg.addColorStop(0, '#121228');
+  bg.addColorStop(0.5, '#0a0a1a');
+  bg.addColorStop(1, '#050510');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 星云
+  drawNebula();
+
+  const time = Date.now() / 1000;
+
+  // 碎片星
+  stars.forEach(s => {
+    const twinkle = 0.7 + 0.3 * Math.sin(time * s.twinkleSpeed * 10 + s.twinkle);
+    const brightness = s.brightness * twinkle;
+    drawStar(s.x, s.y, s.baseSize, brightness, 'rgb(180, 180, 220)');
+  });
+
+  // 线索星座连线
+  threadStars.forEach(t => {
+    const twinkle = 0.7 + 0.3 * Math.sin(time * t.twinkleSpeed * 10 + t.twinkle);
+
+    // 连线
+    if (t.memberStars.length > 0) {
+      ctx.strokeStyle = `rgba(122, 197, 160, ${0.15 * twinkle})`;
+      ctx.lineWidth = 0.8;
+      t.memberStars.forEach(m => {
+        ctx.beginPath();
+        ctx.moveTo(t.x, t.y);
+        ctx.lineTo(m.x, m.y);
+        ctx.stroke();
+      });
+
+      // 成员星之间连一下 形成星座形状
+      for (let i = 0; i < t.memberStars.length; i++) {
+        const next = (i + 1) % t.memberStars.length;
+        ctx.beginPath();
+        ctx.moveTo(t.memberStars[i].x, t.memberStars[i].y);
+        ctx.lineTo(t.memberStars[next].x, t.memberStars[next].y);
+        ctx.stroke();
+      }
+
+      // 成员小星星
+      t.memberStars.forEach(m => {
+        drawStar(m.x, m.y, 0.8, 0.3 * twinkle, 'rgb(150, 200, 170)');
+      });
+    }
+
+    // 核心星
+    drawStar(t.x, t.y, t.baseSize, t.brightness * twinkle, 'rgb(122, 197, 160)');
+  });
+
+  // 认知亮星
+  claimStars.forEach(c => {
+    const twinkle = 0.8 + 0.2 * Math.sin(time * c.twinkleSpeed * 10 + c.twinkle);
+    drawStar(c.x, c.y, c.baseSize, c.brightness * twinkle, 'rgb(240, 216, 144)');
+  });
+
+  // hover 高亮
+  if (hoveredStar) {
+    ctx.beginPath();
+    ctx.arc(hoveredStar.x, hoveredStar.y, hoveredStar.baseSize * 3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212, 197, 160, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(render);
+}
+
+// 绘制星云
+function drawNebula() {
+  const time = Date.now() / 50000;
+  const cx = W / 2 + Math.sin(time) * 50;
+  const cy = H / 2 + Math.cos(time * 0.7) * 30;
+
+  const neb = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.5);
+  neb.addColorStop(0, 'rgba(80, 60, 120, 0.08)');
+  neb.addColorStop(0.3, 'rgba(60, 80, 120, 0.05)');
+  neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = neb;
+  ctx.fillRect(0, 0, W, H);
+
+  // 第二团星云
+  const cx2 = W * 0.3 + Math.cos(time * 1.3) * 40;
+  const cy2 = H * 0.7 + Math.sin(time * 0.9) * 35;
+  const neb2 = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, 200);
+  neb2.addColorStop(0, 'rgba(100, 80, 140, 0.06)');
+  neb2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = neb2;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ===== 信息面板 =====
+function showPanel(star) {
+  const panel = document.getElementById('infoPanel');
+  const kicker = document.getElementById('infoKicker');
+  const title = document.getElementById('infoTitle');
+  const date = document.getElementById('infoDate');
+  const body = document.getElementById('infoBody');
+  const tags = document.getElementById('infoTags');
+  const threadsEl = document.getElementById('infoThreads');
+  const conviction = document.getElementById('infoConviction');
+  const convictionFill = document.getElementById('convictionFill');
+
+  if (star.type === 'fragment') {
+    kicker.textContent = 'FRAGMENT · 记忆碎片';
+    title.textContent = star.data.title || '无题';
+    date.textContent = star.data.dateLabel || '';
+    body.textContent = star.data.body || '';
+    tags.innerHTML = (star.data.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
+    threadsEl.textContent = star.data.threadIds && star.data.threadIds.length
+      ? `关联线索：${star.data.threadIds.join('、')}`
+      : '';
+    conviction.style.display = 'none';
+  } else if (star.type === 'thread') {
+    kicker.textContent = 'THREAD · 线索星座';
+    title.textContent = star.data.label || star.data.id;
+    date.textContent = star.data.openQuestion || '';
+    body.textContent = `状态：${star.data.status || '未知'}\n碎片数量：${star.data.history ? star.data.history.length : 0}\n脉络深度：${star.data.dragonVein || 0}`;
+    tags.innerHTML = '';
+    threadsEl.textContent = '';
+    conviction.style.display = 'none';
+  } else if (star.type === 'claim') {
+    kicker.textContent = 'CLAIM · 认知亮星';
+    title.textContent = star.data.text || star.data.id;
+    date.textContent = `边界：${star.data.boundary || '未知'}`;
+
+    // 版本历史
+    let versionsText = '';
+    if (star.data.versions && star.data.versions.length > 0) {
+      const latest = star.data.versions[star.data.versions.length - 1];
+      versionsText = `\n\n最新更新：${latest.at}\n变化原因：${latest.reason || '—'}`;
+    }
+    body.textContent = (star.data.text || '') + versionsText;
+
+    tags.innerHTML = '';
+    threadsEl.textContent = '';
+    conviction.style.display = 'block';
+    convictionFill.style.width = (star.data.conviction * 100).toFixed(0) + '%';
+  }
+
+  panel.classList.add('show');
+}
+
+function closePanel() {
+  document.getElementById('infoPanel').classList.remove('show');
+}
+
+// ===== 初始化 =====
+// 读取 localStorage
+const savedUserId = localStorage.getItem('twig_user_id');
+const savedToken = localStorage.getItem('twig_auth_token');
+if (savedUserId) document.getElementById('userIdInput').value = savedUserId;
+if (savedToken) document.getElementById('tokenInput').value = savedToken;
+
+loadData();
+render();
+</script>
+</body>
+</html>
