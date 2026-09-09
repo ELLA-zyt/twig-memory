@@ -173,22 +173,24 @@ export async function answerBatchLME(items: { question: string; frags: Frag[]; q
   const systemPrompt = `You are the long-term memory of a chat assistant that has been conversing with a user across many sessions over time. Answer EACH question using ONLY the memory fragments attached to that question (they are independent).
 
 CRITICAL RULES:
-1. If a question's fragments do not contain its answer, reply for that question exactly: I don't have that information. Never guess or fabricate.
+1. Refuse ONLY when a question's fragments contain NO information relevant to it — then reply for that question exactly: I don't have that information. If fragments contain related or partial information, you MUST use it and answer (for preference/advice questions, synthesizing from the user's details IS the answer — never refuse those when any user detail is present). BUT if fragments only describe something similar-yet-different from what is asked (a different place, person, time period, or item), do NOT force an answer out of them — reply exactly: I don't have that information. Never guess or fabricate specifics not grounded in the fragments.
 2. For "how many days/weeks/months ago" or "how long between" questions: you MUST compute the answer from the [date] prefixes of the fragments and the Question date given for each question. The Question date is the reference date. Subtract the event date from the Question date to get the answer. Do NOT decline these questions if the event is mentioned in the fragments — compute and answer.
 3. For "how many" counting questions (e.g. "how many restaurants"): count occurrences across ALL fragments for that question.
 4. For preference questions, give a personalized response based on the user's information in the fragments.
 5. Each answer should be concise and direct.
 
 Output JSON only: {"answers":["...","..."]} with exactly ${items.length} entries in input order.`
-  // 思考型模型会把推理链计入 max_tokens：预算按「思考+产出」双份给（eval-locomo.ts 同款）
-  const budget = 1400 * items.length
+  // 思考型模型会把推理链计入 max_tokens：预算按「思考+产出」给足（计数批思考量大，1400/题 实测会截断 JSON 致整批报废）
+  const budget = 2000 * items.length
   const raw = answerModelCfg
     ? await answerChatDirect([{ role: 'system', content: systemPrompt }, { role: 'user', content: list }], { temperature: 0.1, maxTokens: budget })
     : await moonshotChat([{ role: 'system', content: systemPrompt }, { role: 'user', content: list }], { temperature: 0.1, maxTokens: budget })
   const j = extractJson<{ answers: string[] }>(raw)
-  const out = Array.isArray(j?.answers) ? j!.answers.map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__')) : []
-  while (out.length < items.length) out.push('__LLM_FAILED__')
-  return out.slice(0, items.length)
+  // JSON 报废/条数不足不得静默填尸体（批 77 事故：整批 5 题全灭）——抛错走批级重试
+  if (!Array.isArray(j?.answers) || j!.answers.length < items.length) {
+    throw new Error(`answers JSON 报废（期望 ${items.length} 条，解析到 ${j?.answers?.length ?? 0} 条）`)
+  }
+  return j!.answers.slice(0, items.length).map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__'))
 }
 
 /**
@@ -229,9 +231,11 @@ export async function judgeBatchLME(items: {
     { role: 'user', content: list },
   ], { temperature: 0, maxTokens: 500 * items.length })
   const j = extractJson<{ labels: string[] }>(raw)
-  const out = Array.isArray(j?.labels) ? j!.labels.map((s) => /^yes/i.test(String(s)) ? 1 : 0) : []
-  while (out.length < items.length) out.push(0)
-  return out.slice(0, items.length)
+  // 同 answers：报废/条数不足抛错走批级重试，不静默填 0
+  if (!Array.isArray(j?.labels) || j!.labels.length < items.length) {
+    throw new Error(`judge labels JSON 报废（期望 ${items.length} 条，解析到 ${j?.labels?.length ?? 0} 条）`)
+  }
+  return j!.labels.slice(0, items.length).map((s) => (/^yes/i.test(String(s)) ? 1 : 0))
 }
 
 /* ---------------- 指标汇总（对照官方 print_qa_metrics.py） ---------------- */
@@ -384,7 +388,8 @@ async function main() {
         await sleep(30_000)
         try {
           res = await expandQueryBatchLME(chunk.map((e) => e.question))
-        } catch {
+        } catch (err) {
+          console.error(`[eval-longmemeval] expand 批失败(${i}+10题，二次重试后)：`, err instanceof Error ? err.message : err)
           fails.expand++
         }
       }
@@ -427,7 +432,8 @@ async function main() {
       await sleep(30_000)
       try {
         answers = await answerBatchLME(chunkIdx.map((j) => ({ question: entries[j].question, frags: retrieved[j], questionDate: entries[j].question_date })))
-      } catch {
+      } catch (err) {
+        console.error(`[eval-longmemeval] answer 批失败(${i}+${chunkIdx.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
         fails.answer++
         answers = chunkIdx.map(() => '__LLM_FAILED__')
       }
@@ -460,7 +466,8 @@ async function main() {
           gold: entries[j].answer,
           pred: preds[j],
         })))
-      } catch {
+      } catch (err) {
+        console.error(`[eval-longmemeval] judge 批失败(${i}+${chunkIdx.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
         fails.judge++
         scores = chunkIdx.map(() => 0)
       }

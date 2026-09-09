@@ -206,11 +206,13 @@ export async function answerBatch(items: { question: string; frags: Frag[] }[]):
       content: `You are the long-term memory of one participant in a months-long conversation. Answer EACH question using ONLY the memory fragments attached to that question (they are independent). If a question's fragments do not contain its answer, reply for that question exactly: I don't have that information. Never guess. For when/how long/how often questions, rely on the [date] prefix of the fragment that states the event — that date is when the event was discussed and is usually the answer. For would/likely questions about preferences or plans, give the most plausible short inference from the fragments (start with "Likely") instead of declining. Each answer under 30 words. Output JSON only: {"answers":["...","..."]} with exactly ${items.length} entries in input order.`,
     },
     { role: 'user', content: list },
-  ], { temperature: 0.1, maxTokens: 700 * items.length })
+  ], { temperature: 0.1, maxTokens: 1400 * items.length })
   const j = extractJson<{ answers: string[] }>(raw)
-  const out = Array.isArray(j?.answers) ? j!.answers.map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__')) : []
-  while (out.length < items.length) out.push('__LLM_FAILED__')
-  return out.slice(0, items.length)
+  // JSON 报废/条数不足抛错走批级重试（LME 批 77 同款事故），不静默填尸体
+  if (!Array.isArray(j?.answers) || j!.answers.length < items.length) {
+    throw new Error(`answers JSON 报废（期望 ${items.length} 条，解析到 ${j?.answers?.length ?? 0} 条）`)
+  }
+  return j!.answers.slice(0, items.length).map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__'))
 }
 
 /** 按类别分批判分（同批同类别，判据一致）；adversarial：正确拒答才得分 */
@@ -228,9 +230,11 @@ export async function judgeBatch(cat: number, items: { question: string; gold: s
     { role: 'user', content: list },
   ], { temperature: 0.1, maxTokens: 500 * items.length })
   const j = extractJson<{ scores: number[] }>(raw)
-  const scores = Array.isArray(j?.scores) ? j!.scores.map((s) => (Number(s) >= 1 ? 1 : 0)) : []
-  while (scores.length < items.length) scores.push(0)
-  return scores.slice(0, items.length)
+  // 同 answers：报废/条数不足抛错走批级重试，不静默填 0
+  if (!Array.isArray(j?.scores) || j!.scores.length < items.length) {
+    throw new Error(`judge scores JSON 报废（期望 ${items.length} 条，解析到 ${j?.scores?.length ?? 0} 条）`)
+  }
+  return j!.scores.slice(0, items.length).map((s) => (Number(s) >= 1 ? 1 : 0))
 }
 
 /* ---------------- 主流程 ---------------- */
@@ -287,7 +291,8 @@ async function main() {
           await sleep(30_000)
           try {
             res = await expandQueryBatch(chunk.map((q) => q.question))
-          } catch {
+          } catch (err) {
+            console.error(`[eval-locomo] expand 批失败(${i}+${chunk.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
             fails.expand++ // 失败退回原问题（仅损失 HyDE 增量，不污染数据）
           }
         }
@@ -322,7 +327,8 @@ async function main() {
         await sleep(30_000)
         try {
           answers = await answerBatch(chunkIdx.map((j) => ({ question: qas[j].question, frags: retrieved[j] })))
-        } catch {
+        } catch (err) {
+          console.error(`[eval-locomo] answer 批失败(${i}+${chunkIdx.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
           fails.answer++
           answers = chunkIdx.map(() => '__LLM_FAILED__')
         }
@@ -352,7 +358,8 @@ async function main() {
               gold: qas[j].answer ?? `(adversarial trap: ${qas[j].adversarial_answer ?? '—'})`,
               pred: preds[j],
             })))
-          } catch {
+          } catch (err) {
+            console.error(`[eval-locomo] judge 批失败(${i}+${chunk.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
             fails.judge++
             scores = chunk.map(() => 0)
           }

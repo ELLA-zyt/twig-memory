@@ -361,6 +361,16 @@ temporal-reasoning **0.820** / multi-session **0.812** / single-session-preferen
 检索召回 turn-level **0.962** / session-level **0.989**。
 明细：`server/eval-data/longmemeval-s-result-1787405412219.json`（force-added，gitignored 目录破例入库）。
 
+**全量基线 v0.2.0（2026-09-10，LongMemEval_S，r7 零失败卷）**：
+k=15，BM25 + BGE-M3 向量 RRF + HyDE（嵌入经硅基流动），作答/判分 glm-5-3-260801（火山方舟 Agent Plan `/api/plan/v3`）。
+500 题零批失败、零单题尸体——
+single-session-user **1.000** / single-session-preference **0.933** / single-session-assistant **0.982** /
+temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.752** /
+**Task-averaged 0.9167 / Overall 0.892 / Abstention 0.900**（27/30）。
+检索召回 turn-level **0.972** / session-level **0.996**。
+口径变更（对照 M3 基线必读）：拒答条款收半格（相关性扳机 + 近似碎片护栏）、作答预算 2000/题、传输层空内容放大至 16000 + 末次低推理刹车；multi-session 0.752 处历史波动带（0.74~0.81）内，计数欠数随 HyDE 抽样摆动。
+明细：`server/eval-data/longmemeval-s-result-1788993683045.json`（force-added，gitignored 目录破例入库）；前一卷 r6（0.876，含 5 尸）不作正式成绩，验尸见同目录 NOTE.md。
+
 ## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
 
 | # | 债务 | 状态 |

@@ -132,7 +132,7 @@ npm run dev   # 记忆书前端，默认 http://localhost:7100
 - **印章与玻璃珠**：8 章 × 12 珠的火漆封存仪式（`shared/stamps.ts` 前后端共用注册表），一签一章，盖印生成影子碎片让引擎知道今天的心境。
 - **冲突响应评测**：22/22（100%）。
 - **LoCoMo 事实底盘**：0.640，双口径过线，高于 mem0 参照宏平均。
-- **LongMemEval-S**：Overall 0.856 / Task-averaged 0.844 / Abstention 0.867。
+- **LongMemEval-S**：Overall 0.892 / Task-averaged 0.9167 / Abstention 0.900（v0.2.0 口径，glm-5.3 作答判分）。
 
 完整评测配置与细节见 [server/README.md](server/README.md)；前端与情感层设计见 [docs/新前端技术设计文档-v1.0.md](docs/新前端技术设计文档-v1.0.md)。
 

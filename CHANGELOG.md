@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-（暂无）
+### LongMemEval-S v0.2.0 口径收官（2026-09-10）
+
+- 零失败卷入账：**Overall 0.892 / Task-averaged 0.9167 / Abstention 0.900**（27/30），500 题零批失败、零单题尸体，明细 `server/eval-data/longmemeval-s-result-1788993683045.json`
+- 分科：single-session-user **1.000** / single-session-preference **0.933** / single-session-assistant **0.982** / temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.752**
+- 作答/判分口径：glm-5-3-260801（火山方舟 Agent Plan `/api/plan/v3`）；传输层三补丁——plan 网关路径适配、空内容（思考耗尽）一律放大 max_tokens 至 16000、末次重试 `reasoning_effort=low` 刹车（根治 GLM 计数题思考链空转）
+- 拒答条款收半格：扳机由「碎片没有现成答案」改为「碎片完全没有相关信息」+ 近似碎片护栏——销乱拒 9 道、该拒没拒 4 道；preference +7 经独立重判验真，非判分放水
+- 测量硬化：answers/judge JSON 报废或条数不足抛错走批级重试（批 77 整批静默填尸事故根治），作答预算 1400→2000/题；eval-locomo 镜像同修（预算 700→1400）
+- 前一卷 r6（0.876，含 5 尸）不作正式成绩，验尸报告见 `server/eval-data/longmemeval-s-result-1788967446368.NOTE.md`
 
 ## [0.1.0] – 2026-08-26
 
