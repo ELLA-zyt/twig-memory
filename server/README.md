@@ -306,6 +306,12 @@ single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 
 open-domain（0.531 vs 0.729）为已知短板，差在跨碎片推断，已立项为下一靶子。
 mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径」表述。
 
+**全量基线 v0.2.0（2026-09-10，r3 续跑卷，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 glm-5-3-260801 火山方舟 Agent Plan `/api/plan/v3`）**：
+1986 题零单题尸体（前 3 会话经 `--resume` 从增量快照继承，conv-42 断网咬伤后剔除重跑，明细含 `resumedFrom` 溯源）——
+single-hop **0.838** / temporal **0.738** / multi-hop **0.539** / open-domain 0.563（仍未过线 0.656）/ adversarial 0.740（单列不计入；较 M3 基线 0.843 回落，疑与模型拒陷阱风格差异及末次低推理刹车偏好作答有关，待立项复查）；
+**总分 0.6695**，及格线 0.6019（文档总分口径）→ **PASS**，高于 mem0 参照宏平均 0.617。
+明细：`server/eval-data/locomo-result-1789082385558.json`（force-added，gitignored 目录破例入库）。
+
 限流注意：LoCoMo 的 prompt 远大于冲突评测，免费档 TPM 很容易撞墙。管线已做三重防护
 （传输层 429 指数退避、批处理 10/5/5、批级二次重试），`--pace`（默认 12 秒）可再调慢；
 批调用失败数会在结果尾部如实上报（expand 失败只损失 HyDE 增量，answer/judge 失败
@@ -383,7 +389,7 @@ temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.75
 | ⑥ | 事实层修正标注 | **已清**：`/v1/correct`，原文不动，判定层经 fragView 见修正后事实 |
 | ⑦ | contested 再提门槛 | **已清**：≥3 独立新证据 + 14 天冷却 + 邀请式措辞 + 两否封存 + 打地鼠双守卫 |
 | ⑧ | 冲突测试集规范 | **已清**：22 例类型学数据集 + 机械盲评 + `eval-counter.ts` 跑批（基线 100%） |
-| ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.640，双口径过线（宏平均 0.5551 / 文档口径 0.602），超 mem0 参照宏平均 0.617；open-domain 未过线，已立项 |
+| ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.6695（v0.2.0 口径），及格线 0.6019 过线，超 mem0 参照宏平均 0.617；open-domain 未过单科线，已立项 |
 | ⑪ | 合规声明文本 | **已清**：not-a-medical-device / 情感数据最小化 / 命名惯例附则，见 [docs/COMPLIANCE.md](../docs/COMPLIANCE.md) |
 
 ## MVP 简化声明（后续迭代方向）

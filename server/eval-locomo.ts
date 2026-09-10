@@ -253,6 +253,7 @@ async function main() {
   const useHyde = !args.includes('--no-hyde')
   const pace = flag('pace', 12)
   const useEmbed = args.includes('--embed')
+  const resume = args.includes('--resume')
   const llmReady = registerNodeTransport()
 
   if (useEmbed && !embeddingsAvailable()) {
@@ -271,7 +272,25 @@ async function main() {
   let done = 0
   const fails = { expand: 0, answer: 0, judge: 0 }
 
+  // --resume：从增量快照续跑——快照中已完成会话的成绩整卷继承，只跑缺失会话（断网/强重启最多损失当前会话）
+  const doneSamples = new Set<string>()
+  let resumedFrom: string | null = null
+  if (resume) {
+    const partialFile = join(here, 'eval-data', 'locomo-result-partial.json')
+    if (!existsSync(partialFile)) { console.error('[eval-locomo] --resume 需要 server/eval-data/locomo-result-partial.json'); process.exit(2) }
+    const p = JSON.parse(readFileSync(partialFile, 'utf8')) as { savedAt?: string; detailed?: typeof detailed }
+    detailed.push(...(p.detailed ?? []))
+    for (const d of detailed) doneSamples.add(d.sample)
+    resumedFrom = p.savedAt ?? null
+    console.log(`[eval-locomo] 续跑：继承 ${detailed.length} 题（${doneSamples.size} 个会话，快照存于 ${resumedFrom}）\n`)
+  }
+
+  let convDone = doneSamples.size
   for (const conv of data.slice(0, nConvos)) {
+    if (doneSamples.has(conv.sample_id)) {
+      console.log(`--- 会话 ${conv.sample_id}：续跑跳过（已继承 ${detailed.filter((d) => d.sample === conv.sample_id).length} 题） ---`)
+      continue
+    }
     const frags = buildFragments(conv.conversation)
     const retrieve = buildRetriever(frags)
     let qas = conv.qa.filter((q) => cats.includes(q.category))
@@ -372,6 +391,16 @@ async function main() {
         await sleep(pace * 1000)
       }
     }
+    convDone++
+    // 断电/强制重启保险：每跑完一个会话落增量快照（终盘前中断可捞回已完会话成绩，8 小时白跑的教训）
+    try {
+      writeFileSync(
+        join(here, 'eval-data', 'locomo-result-partial.json'),
+        JSON.stringify({ partial: true, convosDone: convDone, savedAt: new Date().toISOString(), nConvos, cats, k, detailed }, null, 2),
+        'utf8',
+      )
+      console.log(`  [快照] ${convDone}/${nConvos} 会话已落盘`)
+    } catch { /* 快照失败不影响主流程 */ }
     if (limit > 0 && done >= limit) break
   }
 
@@ -386,7 +415,7 @@ async function main() {
   const outDir = join(here, 'eval-data')
   mkdirSync(outDir, { recursive: true })
   const outFile = join(outDir, `locomo-result-${Date.now()}.json`)
-  writeFileSync(outFile, JSON.stringify({ ranAt: new Date().toISOString(), nConvos, cats, k, stats, overall, overallBar, overallPass, detailed }, null, 2), 'utf8')
+  writeFileSync(outFile, JSON.stringify({ ranAt: new Date().toISOString(), nConvos, cats, k, stats, overall, overallBar, overallPass, resumedFrom, detailed }, null, 2), 'utf8')
   console.log(`\n[eval-locomo] 批调用失败：expand ${fails.expand} / answer ${fails.answer} / judge ${fails.judge}`)
   console.log(`[eval-locomo] 明细已写入 ${outFile}`)
   process.exit(0)
