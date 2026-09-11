@@ -300,7 +300,7 @@ npx tsx server/eval-locomo.ts --embed --k 15       # 混合检索：BM25 + 硅�
 及格线 = mem0 基线 × 90%（参照 arXiv:2604.04853 Table 11，LLM-judge，adversarial 单列）：
 single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 / 总分 ≥.602。
 
-**全量基线（2026-08-17，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 MiniMax M3 官方 API 直连）**：
+**历史锚点 · M3 时代口径（2026-08-17，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 MiniMax M3 官方 API 直连；不可与 v0.2.0 口径混引）**：
 1986 题零批调用失败——single-hop **0.800** / temporal **0.726** / multi-hop **0.504** / open-domain 0.531 / adversarial 0.843（单列不计入）；
 **总分 0.640**，双口径过线（四类及格线宏平均 0.5551、文档总分口径 0.602），高于 mem0 参照宏平均 0.617。
 open-domain（0.531 vs 0.729）为已知短板，差在跨碎片推断，已立项为下一靶子。
@@ -311,6 +311,7 @@ mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径
 single-hop **0.838** / temporal **0.738** / multi-hop **0.539** / open-domain 0.563（仍未过线 0.656）/ adversarial 0.740（单列不计入；较 M3 基线 0.843 回落，疑与模型拒陷阱风格差异及末次低推理刹车偏好作答有关，待立项复查）；
 **总分 0.6695**，及格线 0.6019（文档总分口径）→ **PASS**，高于 mem0 参照宏平均 0.617。
 明细：`server/eval-data/locomo-result-1789082385558.json`（force-added，gitignored 目录破例入库）。
+查卷附注：adversarial 回落逐题定责为答题侧贪答（116/116 断言式作答、拒答判 0 为 0 道，judge 判据机械无口味问题），疑「would/likely 优先推断」条款对陷阱题误放行，待立项；open-domain 42 错中 20 拒答（「老实人税」叙事不变）；expand 唯一批失败（content_filter，conv-42 #230–239）受影响 10 题全在分母、零尸体。前 3 会话经 `--resume` 继承、conv-42 剔除断网咬伤后重跑，成绩跑于焊死前同一内容工作区，补丁内容与 commit `6e7118f` 一致。
 
 限流注意：LoCoMo 的 prompt 远大于冲突评测，免费档 TPM 很容易撞墙。管线已做三重防护
 （传输层 429 指数退避、批处理 10/5/5、批级二次重试），`--pace`（默认 12 秒）可再调慢；
@@ -358,7 +359,7 @@ session-level `answer_session_ids` 命中率，诊断用，abstention 题不计�
 `--embed` / `--no-hyde` / `--pace` / 作答判分模型切换与 LoCoMo 完全相同（共用 `.env.local`）。
 判分模型与官方不同（官方用 GPT-4o，本管线用 `MUNINN_MODEL`），对照结论以「参照口径」表述。
 
-**全量基线（2026-08-22，LongMemEval_S，commit `59352ea`）**：
+**历史锚点 · M3 时代口径（2026-08-22，LongMemEval_S，commit `59352ea`；不可与 v0.2.0 口径混引）**：
 k=15，BM25 + BGE-M3 向量 RRF + HyDE（嵌入经硅基流动），作答/判分 MiniMax M3（官方 API 直连）。
 500 题零批调用失败——
 single-session-user **1.000** / single-session-assistant **0.982** / knowledge-update **0.885** /
@@ -376,6 +377,7 @@ temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.75
 检索召回 turn-level **0.972** / session-level **0.996**。
 口径变更（对照 M3 基线必读）：拒答条款收半格（相关性扳机 + 近似碎片护栏）、作答预算 2000/题、传输层空内容放大至 16000 + 末次低推理刹车；multi-session 0.752 处历史波动带（0.74~0.81）内，计数欠数随 HyDE 抽样摆动。
 明细：`server/eval-data/longmemeval-s-result-1788993683045.json`（force-added，gitignored 目录破例入库）；前一卷 r6（0.876，含 5 尸）不作正式成绩，验尸见同目录 NOTE.md。
+登记项：preference 剩 2 错（0edc2aef 检索未命中后拒答，属检索账；09d032c9 证据在手仍拒，属条款残余）；条款回火 2 道（dd2973ad 就寝时间 / 0977f2af 厨房小家电，均证据在手新增拒答）——净收益仍为 +12/-2。成绩跑于焊死前同一内容工作区，补丁内容与 commit `85cc113` 一致。
 
 ## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
 

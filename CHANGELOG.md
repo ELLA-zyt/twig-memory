@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-### LongMemEval-S v0.2.0 口径收官（2026-09-10）
+### v0.2.0 跑分收官（2026-09-09 ~ 09-10）：双基准零尸体入账（glm-5.3 口径）
+
+**LongMemEval-S**
 
 - 零失败卷入账：**Overall 0.892 / Task-averaged 0.9167 / Abstention 0.900**（27/30），500 题零批失败、零单题尸体，明细 `server/eval-data/longmemeval-s-result-1788993683045.json`
 - 分科：single-session-user **1.000** / single-session-preference **0.933** / single-session-assistant **0.982** / temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.752**
@@ -11,12 +13,14 @@
 - 测量硬化：answers/judge JSON 报废或条数不足抛错走批级重试（批 77 整批静默填尸事故根治），作答预算 1400→2000/题；eval-locomo 镜像同修（预算 700→1400）
 - 前一卷 r6（0.876，含 5 尸）不作正式成绩，验尸报告见 `server/eval-data/longmemeval-s-result-1788967446368.NOTE.md`
 
-### LoCoMo v0.2.0 口径收官（2026-09-10）
+**LoCoMo**
 
 - 续跑卷入账：**总分 0.6695 / 及格线 0.6019 → PASS**，1986 题零单题尸体，明细 `server/eval-data/locomo-result-1789082385558.json`
 - 分科：single-hop **0.838** / temporal **0.738** / multi-hop **0.539** / open-domain 0.563（仍未过单科线 0.656，立项靶子保留）；adversarial 0.740（单列不计入，较 M3 基线 0.843 回落，已注记待查）
 - `eval-locomo` 抗断网三件套：逐会话增量快照（终盘前中断可捞回已完会话）、`--resume` 从快照续跑（断网/强重启最多损失当前会话）、answers/judge JSON 报废抛错走批级重试；作答预算 700→1400/题
 - 两轮断网实战：r2 被 Windows 强制更新与断网咬死两次，conv-42 剔除后经 `--resume` 干净重跑，前 3 会话成绩整卷继承（明细含 `resumedFrom` 溯源）
+- 查卷定责（抽样版）：adversarial 回落 0.843→0.740 为**答题侧贪答**（116/116 断言式作答、judge 无责——判据机械「拒答才给分」），疑 would/likely 条款对陷阱题误放行；open-domain 42 错中 20 拒答（「老实人税」叙事不变，CONSERVATIVE 口径照旧）；expand content_filter 批受影响 10 题全在分母、零尸体；LME 登记 preference 剩 2 错（1 检索未命中 / 1 证据在手仍拒）+ 条款回火 2 道（就寝时间 / 厨房小家电）
+- 口径声明：两卷成绩跑于焊死前同一内容工作区（补丁内容与 `85cc113` / `6e7118f` 完全一致）；旧 M3 口径成绩（LME 0.856 / LoCoMo 0.640）降档为「历史锚点」，不可与新口径混引
 
 ## [0.1.0] – 2026-08-26
 
