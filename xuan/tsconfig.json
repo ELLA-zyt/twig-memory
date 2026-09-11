@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.xuan.tsbuildinfo",
+    "paths": {
+      "@/*": ["./xuan/src/*"]
+    }
+  },
+  "include": ["src"]
+}

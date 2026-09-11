@@ -1,0 +1,44 @@
+/* 临水轩 · 设计令牌
+   三色锚点：汝窑青（水色环境）× 绢白（屏面纸面）× 朱砂（丝绦印章点睛）。
+   所有颜色只允许引用令牌，不允许散落硬编码。 */
+
+:root {
+  /* 墨色 */
+  --ink: #33434c;
+  --ink-soft: #5f7178;
+  --ink-faint: #8fa1a6;
+
+  /* 绢帛 */
+  --silk: #f3ecdd;
+  --silk-deep: #e7dcc3;
+  --silk-line: #d8c9a8;
+
+  /* 汝窑青 */
+  --celadon: #9fbfb7;
+  --celadon-deep: #6f958f;
+  --celadon-pale: #d7e5e0;
+  --celadon-ink: #486a66;
+
+  /* 朱砂与胭脂 */
+  --cinnabar: #a8402f;
+  --cinnabar-deep: #8c3323;
+  --rouge: #e8b7c4;
+  --rouge-deep: #c97f92;
+
+  /* 木与金 */
+  --wood: #7b5a40;
+  --wood-deep: #4a3524;
+  --wood-line: #332417;
+  --gold: #c2a061;
+
+  /* 环境 */
+  --shadow-soft: 0 18px 50px -18px rgba(45, 70, 75, 0.45);
+  --shadow-lift: 0 30px 70px -20px rgba(35, 60, 65, 0.55);
+
+  /* 时辰光色（由 ambience.js 按真实时刻改写） */
+  --ambience-tint: rgba(255, 255, 240, 0.04);
+  --wind: 0;
+
+  --font-guofeng: "LXGW WenKai", "霞鹜文楷", "Kaiti SC", "STKaiti", "KaiTi",
+    "Noto Serif SC", serif;
+}
