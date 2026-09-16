@@ -1,17 +1,19 @@
 {
   "metadata": {
-    "run_at": "2026-09-16T16:00:00+08:00",
-    "commit": "1248db4",
+    "run_at": "2026-09-16T18:30:00+08:00",
+    "commit": "b558b85",
     "dataset": "LoCoMo 10 sessions",
     "questions": 1986,
     "server": "http://localhost:7301",
     "k_list": [10, 20, 50, 100],
     "fuse": {
-      "aml_embed": "1",
-      "aml_hyde": "1",
       "aml_search_deadline_ms": 25000,
       "aml_embed_timeout_ms": 10000,
       "aml_hyde_timeout_ms": 12000,
+      "e2_run_override": {
+        "aml_embed_timeout_ms": 15000,
+        "aml_hyde_timeout_ms": 25000
+      },
       "rrf_k": 60,
       "bm25_k_multiplier": 2
     },
@@ -67,9 +69,62 @@
         }
       }
     },
-    "E": {
-      "status": "pending_api_key",
-      "note": "需要 Agent Plan API Key 重新配置 .env.local 后复测"
+    "E2": {
+      "run_label": "20260916-e2",
+      "aml_embed": "1",
+      "aml_hyde": "1",
+      "wall_time": "1h10m",
+      "avg_search_ms": 5162,
+      "max_search_ms": 50106,
+      "latency_ms": {
+        "p50": 4236,
+        "p95": 9631,
+        "p99": 22461,
+        "max": 50106
+      },
+      "fuse_downgrades": {
+        "hyde": 3,
+        "embed": 1,
+        "deadline": 17,
+        "total_events": 21,
+        "queries_affected": 17
+      },
+      "hit": {
+        "10": { "hit": 1413, "total": 1986, "acc": 0.7115 },
+        "20": { "hit": 1558, "total": 1986, "acc": 0.7845 },
+        "50": { "hit": 1744, "total": 1986, "acc": 0.8781 },
+        "100": { "hit": 1744, "total": 1986, "acc": 0.8781 }
+      },
+      "categories": {
+        "10": {
+          "multi-hop": { "hit": 173, "total": 282, "acc": 0.6135 },
+          "temporal": { "hit": 240, "total": 321, "acc": 0.7477 },
+          "open-domain": { "hit": 40, "total": 96, "acc": 0.4167 },
+          "single-hop": { "hit": 623, "total": 841, "acc": 0.7408 },
+          "adversarial": { "hit": 337, "total": 446, "acc": 0.7556 }
+        },
+        "20": {
+          "multi-hop": { "hit": 204, "total": 282, "acc": 0.7234 },
+          "temporal": { "hit": 261, "total": 321, "acc": 0.8131 },
+          "open-domain": { "hit": 42, "total": 96, "acc": 0.4375 },
+          "single-hop": { "hit": 678, "total": 841, "acc": 0.8062 },
+          "adversarial": { "hit": 373, "total": 446, "acc": 0.8363 }
+        },
+        "50": {
+          "multi-hop": { "hit": 238, "total": 282, "acc": 0.8440 },
+          "temporal": { "hit": 283, "total": 321, "acc": 0.8816 },
+          "open-domain": { "hit": 52, "total": 96, "acc": 0.5417 },
+          "single-hop": { "hit": 760, "total": 841, "acc": 0.9037 },
+          "adversarial": { "hit": 411, "total": 446, "acc": 0.9215 }
+        },
+        "100": {
+          "multi-hop": { "hit": 238, "total": 282, "acc": 0.8440 },
+          "temporal": { "hit": 283, "total": 321, "acc": 0.8816 },
+          "open-domain": { "hit": 52, "total": 96, "acc": 0.5417 },
+          "single-hop": { "hit": 760, "total": 841, "acc": 0.9037 },
+          "adversarial": { "hit": 411, "total": 446, "acc": 0.9215 }
+        }
+      }
     }
   }
 }
