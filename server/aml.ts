@@ -26,7 +26,7 @@ loadEnvLocal()
 registerNodeTransport()
 
 const here = dirname(fileURLToPath(import.meta.url))
-const PORT = Number(process.env.AML_PORT) || 7301
+const PORT = Number(process.env.PORT || process.env.AML_PORT) || 7301
 const DATA_DIR = process.env.AML_DATA_DIR || join(here, 'data-aml')
 const AUTH_TOKEN = process.env.AML_AUTH_TOKEN || ''
 const TZ = process.env.MUNINN_TZ || 'Asia/Shanghai'
