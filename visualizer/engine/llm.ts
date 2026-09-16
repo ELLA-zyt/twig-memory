@@ -15,7 +15,7 @@ export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: s
  *  opts.model 为按调用覆盖的模型名（异源反证生成用，缺省用默认模型） */
 export type ChatTransport = (
   messages: ChatMessage[],
-  opts?: { temperature?: number; maxTokens?: number; model?: string },
+  opts?: { temperature?: number; maxTokens?: number; model?: string; extraBody?: Record<string, unknown> },
 ) => Promise<string>
 
 let customTransport: ChatTransport | null = null
@@ -26,7 +26,7 @@ export function setChatTransport(t: ChatTransport | null): void {
 
 export async function moonshotChat(
   messages: ChatMessage[],
-  opts?: { temperature?: number; maxTokens?: number; model?: string },
+  opts?: { temperature?: number; maxTokens?: number; model?: string; extraBody?: Record<string, unknown> },
 ): Promise<string> {
   if (customTransport) return customTransport(messages, opts)
   const ctrl = new AbortController()
@@ -40,6 +40,7 @@ export async function moonshotChat(
         temperature: opts?.temperature ?? 0.3,
         max_tokens: opts?.maxTokens ?? 700,
         messages,
+        ...(opts?.extraBody ?? {}),
       }),
       signal: ctrl.signal,
     })

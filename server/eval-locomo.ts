@@ -180,7 +180,10 @@ export function fuseRrf(bm25: Frag[], vec: Frag[], k: number, rrfK = 60): Frag[]
 /* ---------------- 作答与判分（批处理：限流友好，10/5/5 题一批） ---------------- */
 
 /** HyDE 批量扩查询：把问题改写成「假想中的证据碎片」——答案词汇进入查询，弥合转述鸿沟（§4.4 检索层迁移） */
-export async function expandQueryBatch(questions: string[]): Promise<string[]> {
+export async function expandQueryBatch(
+  questions: string[],
+  opts?: { model?: string; extraBody?: Record<string, unknown> },
+): Promise<string[]> {
   const list = questions.map((q, i) => `${i + 1}. ${q}`).join('\n')
   const raw = await moonshotChat([
     {
@@ -189,7 +192,7 @@ export async function expandQueryBatch(questions: string[]): Promise<string[]> {
     },
     { role: 'user', content: list },
     // 思考型模型会把推理链计入 max_tokens：预算按「思考+产出」双份给
-  ], { temperature: 0.7, maxTokens: 500 * questions.length })
+  ], { temperature: 0.7, maxTokens: 500 * questions.length, ...opts })
   const j = extractJson<{ snippets: string[] }>(raw)
   const out = Array.isArray(j?.snippets) ? j!.snippets.map((s) => (typeof s === 'string' ? s : '')) : []
   while (out.length < questions.length) out.push('')

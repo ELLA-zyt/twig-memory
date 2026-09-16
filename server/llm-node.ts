@@ -78,6 +78,7 @@ export function registerNodeTransport(): boolean {
             // 低推理强度强制收尾；前 MAX_RETRIES 次保持全强度不影响正常题质量
             ...(attempt === MAX_RETRIES ? { reasoning_effort: 'low' } : {}),
             messages,
+            ...(opts?.extraBody ?? {}),
           }),
           signal: ctrl.signal,
         })

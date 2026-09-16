@@ -14,7 +14,10 @@
     "preview": "vite preview",
     "start": "node --import tsx server/http.ts",
     "server:http": "tsx watch server/http.ts",
-    "server:mcp": "tsx server/mcp.ts"
+    "server:mcp": "tsx server/mcp.ts",
+    "server:aml": "tsx server/aml.ts",
+    "aml:selfcheck": "tsx server/aml-selfcheck.ts",
+    "aml:replay": "tsx server/aml-replay.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

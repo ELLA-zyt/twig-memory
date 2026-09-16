@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "run_at": "2026-09-16T16:00:00+08:00",
+    "commit": "1248db4",
+    "dataset": "LoCoMo 10 sessions",
+    "questions": 1986,
+    "server": "http://localhost:7301",
+    "k_list": [10, 20, 50, 100],
+    "fuse": {
+      "aml_embed": "1",
+      "aml_hyde": "1",
+      "aml_search_deadline_ms": 25000,
+      "aml_embed_timeout_ms": 10000,
+      "aml_hyde_timeout_ms": 12000,
+      "rrf_k": 60,
+      "bm25_k_multiplier": 2
+    },
+    "models": {
+      "hyde_llm": "glm-5-3-flash-260828",
+      "hyde_plan_llm": "glm-5-3-260801",
+      "embed_model": "BAAI/bge-m3",
+      "embed_provider": "SiliconFlow"
+    }
+  },
+  "results": {
+    "B": {
+      "run_label": "20260916-b",
+      "aml_embed": "1",
+      "aml_hyde": "0",
+      "wall_time": "15m11s",
+      "avg_search_ms": 1095,
+      "max_search_ms": 37450,
+      "hit": {
+        "10": { "hit": 1042, "total": 1986, "acc": 0.5247 },
+        "20": { "hit": 1276, "total": 1986, "acc": 0.6425 },
+        "50": { "hit": 1522, "total": 1986, "acc": 0.7664 },
+        "100": { "hit": 1684, "total": 1986, "acc": 0.8479 }
+      },
+      "categories": {
+        "10": {
+          "multi-hop": { "hit": 86, "total": 282, "acc": 0.3049 },
+          "temporal": { "hit": 193, "total": 321, "acc": 0.6012 },
+          "open-domain": { "hit": 16, "total": 96, "acc": 0.1667 },
+          "single-hop": { "hit": 473, "total": 841, "acc": 0.5624 },
+          "adversarial": { "hit": 274, "total": 446, "acc": 0.6143 }
+        },
+        "20": {
+          "multi-hop": { "hit": 131, "total": 282, "acc": 0.4645 },
+          "temporal": { "hit": 226, "total": 321, "acc": 0.7040 },
+          "open-domain": { "hit": 31, "total": 96, "acc": 0.3229 },
+          "single-hop": { "hit": 568, "total": 841, "acc": 0.6754 },
+          "adversarial": { "hit": 320, "total": 446, "acc": 0.7175 }
+        },
+        "50": {
+          "multi-hop": { "hit": 194, "total": 282, "acc": 0.6879 },
+          "temporal": { "hit": 253, "total": 321, "acc": 0.7882 },
+          "open-domain": { "hit": 42, "total": 96, "acc": 0.4375 },
+          "single-hop": { "hit": 667, "total": 841, "acc": 0.7931 },
+          "adversarial": { "hit": 366, "total": 446, "acc": 0.8206 }
+        },
+        "100": {
+          "multi-hop": { "hit": 228, "total": 282, "acc": 0.8085 },
+          "temporal": { "hit": 278, "total": 321, "acc": 0.8660 },
+          "open-domain": { "hit": 52, "total": 96, "acc": 0.5417 },
+          "single-hop": { "hit": 728, "total": 841, "acc": 0.8656 },
+          "adversarial": { "hit": 398, "total": 446, "acc": 0.8924 }
+        }
+      }
+    },
+    "E": {
+      "status": "pending_api_key",
+      "note": "需要 Agent Plan API Key 重新配置 .env.local 后复测"
+    }
+  }
+}
