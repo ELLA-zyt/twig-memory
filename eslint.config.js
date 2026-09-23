@@ -6,9 +6,18 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'server']),
+  globalIgnores(['dist']),
+  {
+    files: ['server/aml.ts', 'server/aml-selfcheck.ts', 'server/aml-replay.ts', 'server/aml-ab-matrix.ts'],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.node,
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
+    ignores: ['server/**'],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,

@@ -11,6 +11,13 @@
 
 ## 一分钟跑起来
 
+**你想做什么？**
+
+- **自己用 / 先看看「记忆书」** → 跟完本节四步，浏览器里翻开它
+- **接进手机 App / AI 客户端**（RikkaHub / Kelivo / Operit 等）→ 用[远程 MCP](server/README.md)，手机上什么都不用装
+- **开发者接 API / 跑评测** → [server/README.md](server/README.md) 完整文档
+- **装不上？** 把 [docs/DEPLOY-FOR-AI.md](docs/DEPLOY-FOR-AI.md) 整个发给你的 AI，说一句「照这个带我装」
+
 ### 1. 克隆并安装
 
 ```bash
@@ -19,12 +26,18 @@ cd twig-memory
 npm install
 ```
 
-### 2. 配置 LLM Key
+需要 Node.js 22 或更新（底线 20.19；`node -v` 看一眼）。
+
+### 2. 配置 LLM Key（可选，但推荐）
 
 ```bash
 # 新建 .env.local（已被 .gitignore 排除）
 KIMI_API_KEY=sk-你的-Moonshot-API-Key
 ```
+
+缺省模型 kimi-k2.6（现役）；换模型 / 换供应商用 `MUNINN_MODEL`（三件套同改 `MUNINN_BASE_URL` / `MUNINN_API_KEY`）。
+
+不配也能跑：引擎自动回退规则判定，基础功能照常。但反刍、盲推导审计、日记与便签生成这些标注「需 key」的 LLM 功能会不可用——想见到完整的衔枝，建议配上。
 
 ### 3. 启动服务端
 
@@ -32,7 +45,15 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 ```
 
-然后你的 agent 把事件 POST 到 `/v1/ingest`，每次回复前 GET `/v1/context` 把记忆注入 system prompt，就完成了。
+### 4. 打开记忆书（另开一个终端）
+
+```bash
+npm run dev   # 记忆书前端，默认 http://localhost:7100
+```
+
+浏览器打开 **http://localhost:7100** ——今日扉页 / 记忆书 / 故事线 / 理解文档 / 自检日志 / 设置，都在这本「书」里。
+
+刚翻开时书是空的，正常：**记忆书是引擎的展示窗**，记忆来自你接上去的 AI。客户端挂上[远程 MCP](server/README.md) 后正常聊天，事件就会流进引擎，日记、心迹、便签、印章才会一天天长出来。开发者也可以直接把事件 POST 到 `/v1/ingest`、每次回复前 GET `/v1/context` 把记忆注入本轮 user 消息头部（单轮无状态场景注入 system prompt 末尾）。
 
 > 完整 API 文档、MCP 挂载方式、Zeabur 一键部署见 [server/README.md](server/README.md)。
 
@@ -53,7 +74,7 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
   "recentFragments": [
     { "date": "8月4日", "title": "出道直播排练" }
   ],
-  "promptText": "可直接注入 system prompt 的叙事文本"
+  "promptText": "叙事上下文文本——多轮宿主注入本轮 user 消息头部；单轮无状态注入 system prompt 末尾"
 }
 ```
 
@@ -107,11 +128,21 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 
 - **服务端接入层**：无头引擎 `HeadlessMuninn`、JSON 持久化、HTTP API、MCP server（stdio + 远程）双接入。
 - **新前端「记忆书」已上线**：今日扉页 / 记忆书（日历网格 + 日卡导出）/ 故事线 / 理解文档 / 自检日志 / 设置页（引擎状态灯、存储占用、最近审计一览）。
+- **古风前端「临水轩」全线开馆**：厅堂五扇屏风（眺园图 + 「衔枝榭」匾额 + 工笔画心 + 简介卷轴）全部通向真实模块——春水（波场水面记忆流）/ 采诗（振铎反思 + 诗笺 + 轩中之解）/ 书阁（日记典籍，研墨成书）/ 琼瑶（心迹便签 + 八章盖印玉牒）/ 庭树（状态存储 + 盲推导审计）；竹简书案接 `/v1/chat`（宿主接入位）；`npm run dev:xuan`（端口 7101），设计见 [docs/临水轩前端技术设计文档-v1.0.md](docs/临水轩前端技术设计文档-v1.0.md)。
 - **情感层三件套**：日记 / 心迹 / 便签——平行于编织层、只读于引擎；用户回应经影子碎片 + ContextAnchor 进入引擎视野，不污染编织。
 - **印章与玻璃珠**：8 章 × 12 珠的火漆封存仪式（`shared/stamps.ts` 前后端共用注册表），一签一章，盖印生成影子碎片让引擎知道今天的心境。
 - **冲突响应评测**：22/22（100%）。
-- **LoCoMo 事实底盘**：0.640，双口径过线，高于 mem0 参照宏平均。
-- **LongMemEval-S**：Overall 0.856 / Task-averaged 0.844 / Abstention 0.867。
+
+**v0.2.0 跑分口径**（作答/判分 glm-5-3-260801；2026-09-09/10 两卷，全卷零尸体）：
+
+| 基准 | 成绩 | 判定 |
+|---|---|---|
+| LongMemEval-S（500 题） | Overall **0.892** / Task-avg **0.9167** / Abstention 0.900 | 零批失败零尸体 |
+| LoCoMo（1986 题） | 总分 **0.6695**（及格线 0.6019），超 mem0 参照宏平均 0.617 | PASS；open-domain 单科未过线（0.563 < 0.656） |
+
+> **口径变更声明**（对照历史锚点必读）：作答/判分模型 MiniMax M3 → glm-5-3-260801；LongMemEval 侧拒答条款改「相关性扳机 + 近似碎片护栏」、作答预算上调；两卷分别焊死于 `85cc113` / `6e7118f`，成绩跑于焊死前同一内容工作区。已知口径内退化：LoCoMo adversarial 0.843 → 0.740，逐题定责 116/116 为答题侧贪答、judge 无责，疑「would/likely 优先推断」条款对陷阱题误放行，待立项。
+
+**历史锚点 · M3 时代口径（2026-08，不可混引）**：LongMemEval-S Overall 0.856 / LoCoMo 总分 0.640。
 
 完整评测配置与细节见 [server/README.md](server/README.md)；前端与情感层设计见 [docs/新前端技术设计文档-v1.0.md](docs/新前端技术设计文档-v1.0.md)。
 
@@ -123,6 +154,8 @@ npm run server:http   # HTTP API + 远程 MCP，默认 http://localhost:7300
 twig-memory/
 ├── server/        # 核心引擎 + HTTP API + MCP server + 情感层服务
 ├── visualizer/    # 新前端「记忆书」：今日扉页 / 记忆书 / 故事线 / 理解文档 / 自检日志 / 设置
+├── xuan/          # 古风前端「临水轩」：厅堂五扇屏风 / 春水水面 / 竹简对话台（npm run dev:xuan）
+├── art/           # 临水轩美术资产母版（AI 位图）
 ├── shared/        # 前后端共享常量（印章与玻璃珠注册表）
 ├── docs/          # 技术设计文档、合规声明、危机协议
 ├── README.md      # 你正在看的
@@ -133,6 +166,7 @@ twig-memory/
 
 ## 深入阅读
 
+- [docs/DEPLOY-FOR-AI.md](docs/DEPLOY-FOR-AI.md) —— 托管安装手册（给 AI 看的版本；装不上时把它发给你的 AI）
 - [server/README.md](server/README.md) —— API 文档、部署、评测管线
 - [docs/雾尼Muninn-技术设计文档-v1.3.md](docs/雾尼Muninn-技术设计文档-v1.3.md) —— 完整架构与机制论证
 - [docs/新前端技术设计文档-v1.0.md](docs/新前端技术设计文档-v1.0.md) —— 记忆书前端与情感层（日记/心迹/便签/印章）设计

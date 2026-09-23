@@ -180,7 +180,10 @@ export function fuseRrf(bm25: Frag[], vec: Frag[], k: number, rrfK = 60): Frag[]
 /* ---------------- 作答与判分（批处理：限流友好，10/5/5 题一批） ---------------- */
 
 /** HyDE 批量扩查询：把问题改写成「假想中的证据碎片」——答案词汇进入查询，弥合转述鸿沟（§4.4 检索层迁移） */
-export async function expandQueryBatch(questions: string[]): Promise<string[]> {
+export async function expandQueryBatch(
+  questions: string[],
+  opts?: { model?: string; extraBody?: Record<string, unknown> },
+): Promise<string[]> {
   const list = questions.map((q, i) => `${i + 1}. ${q}`).join('\n')
   const raw = await moonshotChat([
     {
@@ -189,7 +192,7 @@ export async function expandQueryBatch(questions: string[]): Promise<string[]> {
     },
     { role: 'user', content: list },
     // 思考型模型会把推理链计入 max_tokens：预算按「思考+产出」双份给
-  ], { temperature: 0.7, maxTokens: 500 * questions.length })
+  ], { temperature: 0.7, maxTokens: 500 * questions.length, ...opts })
   const j = extractJson<{ snippets: string[] }>(raw)
   const out = Array.isArray(j?.snippets) ? j!.snippets.map((s) => (typeof s === 'string' ? s : '')) : []
   while (out.length < questions.length) out.push('')
@@ -206,11 +209,13 @@ export async function answerBatch(items: { question: string; frags: Frag[] }[]):
       content: `You are the long-term memory of one participant in a months-long conversation. Answer EACH question using ONLY the memory fragments attached to that question (they are independent). If a question's fragments do not contain its answer, reply for that question exactly: I don't have that information. Never guess. For when/how long/how often questions, rely on the [date] prefix of the fragment that states the event — that date is when the event was discussed and is usually the answer. For would/likely questions about preferences or plans, give the most plausible short inference from the fragments (start with "Likely") instead of declining. Each answer under 30 words. Output JSON only: {"answers":["...","..."]} with exactly ${items.length} entries in input order.`,
     },
     { role: 'user', content: list },
-  ], { temperature: 0.1, maxTokens: 700 * items.length })
+  ], { temperature: 0.1, maxTokens: 1400 * items.length })
   const j = extractJson<{ answers: string[] }>(raw)
-  const out = Array.isArray(j?.answers) ? j!.answers.map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__')) : []
-  while (out.length < items.length) out.push('__LLM_FAILED__')
-  return out.slice(0, items.length)
+  // JSON 报废/条数不足抛错走批级重试（LME 批 77 同款事故），不静默填尸体
+  if (!Array.isArray(j?.answers) || j!.answers.length < items.length) {
+    throw new Error(`answers JSON 报废（期望 ${items.length} 条，解析到 ${j?.answers?.length ?? 0} 条）`)
+  }
+  return j!.answers.slice(0, items.length).map((s) => (typeof s === 'string' ? s : '__PARSE_FAIL__'))
 }
 
 /** 按类别分批判分（同批同类别，判据一致）；adversarial：正确拒答才得分 */
@@ -228,9 +233,11 @@ export async function judgeBatch(cat: number, items: { question: string; gold: s
     { role: 'user', content: list },
   ], { temperature: 0.1, maxTokens: 500 * items.length })
   const j = extractJson<{ scores: number[] }>(raw)
-  const scores = Array.isArray(j?.scores) ? j!.scores.map((s) => (Number(s) >= 1 ? 1 : 0)) : []
-  while (scores.length < items.length) scores.push(0)
-  return scores.slice(0, items.length)
+  // 同 answers：报废/条数不足抛错走批级重试，不静默填 0
+  if (!Array.isArray(j?.scores) || j!.scores.length < items.length) {
+    throw new Error(`judge scores JSON 报废（期望 ${items.length} 条，解析到 ${j?.scores?.length ?? 0} 条）`)
+  }
+  return j!.scores.slice(0, items.length).map((s) => (Number(s) >= 1 ? 1 : 0))
 }
 
 /* ---------------- 主流程 ---------------- */
@@ -249,6 +256,7 @@ async function main() {
   const useHyde = !args.includes('--no-hyde')
   const pace = flag('pace', 12)
   const useEmbed = args.includes('--embed')
+  const resume = args.includes('--resume')
   const llmReady = registerNodeTransport()
 
   if (useEmbed && !embeddingsAvailable()) {
@@ -267,7 +275,25 @@ async function main() {
   let done = 0
   const fails = { expand: 0, answer: 0, judge: 0 }
 
+  // --resume：从增量快照续跑——快照中已完成会话的成绩整卷继承，只跑缺失会话（断网/强重启最多损失当前会话）
+  const doneSamples = new Set<string>()
+  let resumedFrom: string | null = null
+  if (resume) {
+    const partialFile = join(here, 'eval-data', 'locomo-result-partial.json')
+    if (!existsSync(partialFile)) { console.error('[eval-locomo] --resume 需要 server/eval-data/locomo-result-partial.json'); process.exit(2) }
+    const p = JSON.parse(readFileSync(partialFile, 'utf8')) as { savedAt?: string; detailed?: typeof detailed }
+    detailed.push(...(p.detailed ?? []))
+    for (const d of detailed) doneSamples.add(d.sample)
+    resumedFrom = p.savedAt ?? null
+    console.log(`[eval-locomo] 续跑：继承 ${detailed.length} 题（${doneSamples.size} 个会话，快照存于 ${resumedFrom}）\n`)
+  }
+
+  let convDone = doneSamples.size
   for (const conv of data.slice(0, nConvos)) {
+    if (doneSamples.has(conv.sample_id)) {
+      console.log(`--- 会话 ${conv.sample_id}：续跑跳过（已继承 ${detailed.filter((d) => d.sample === conv.sample_id).length} 题） ---`)
+      continue
+    }
     const frags = buildFragments(conv.conversation)
     const retrieve = buildRetriever(frags)
     let qas = conv.qa.filter((q) => cats.includes(q.category))
@@ -287,7 +313,8 @@ async function main() {
           await sleep(30_000)
           try {
             res = await expandQueryBatch(chunk.map((q) => q.question))
-          } catch {
+          } catch (err) {
+            console.error(`[eval-locomo] expand 批失败(${i}+${chunk.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
             fails.expand++ // 失败退回原问题（仅损失 HyDE 增量，不污染数据）
           }
         }
@@ -322,7 +349,8 @@ async function main() {
         await sleep(30_000)
         try {
           answers = await answerBatch(chunkIdx.map((j) => ({ question: qas[j].question, frags: retrieved[j] })))
-        } catch {
+        } catch (err) {
+          console.error(`[eval-locomo] answer 批失败(${i}+${chunkIdx.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
           fails.answer++
           answers = chunkIdx.map(() => '__LLM_FAILED__')
         }
@@ -352,7 +380,8 @@ async function main() {
               gold: qas[j].answer ?? `(adversarial trap: ${qas[j].adversarial_answer ?? '—'})`,
               pred: preds[j],
             })))
-          } catch {
+          } catch (err) {
+            console.error(`[eval-locomo] judge 批失败(${i}+${chunk.length}题，二次重试后)：`, err instanceof Error ? err.message : err)
             fails.judge++
             scores = chunk.map(() => 0)
           }
@@ -365,6 +394,16 @@ async function main() {
         await sleep(pace * 1000)
       }
     }
+    convDone++
+    // 断电/强制重启保险：每跑完一个会话落增量快照（终盘前中断可捞回已完会话成绩，8 小时白跑的教训）
+    try {
+      writeFileSync(
+        join(here, 'eval-data', 'locomo-result-partial.json'),
+        JSON.stringify({ partial: true, convosDone: convDone, savedAt: new Date().toISOString(), nConvos, cats, k, detailed }, null, 2),
+        'utf8',
+      )
+      console.log(`  [快照] ${convDone}/${nConvos} 会话已落盘`)
+    } catch { /* 快照失败不影响主流程 */ }
     if (limit > 0 && done >= limit) break
   }
 
@@ -379,7 +418,7 @@ async function main() {
   const outDir = join(here, 'eval-data')
   mkdirSync(outDir, { recursive: true })
   const outFile = join(outDir, `locomo-result-${Date.now()}.json`)
-  writeFileSync(outFile, JSON.stringify({ ranAt: new Date().toISOString(), nConvos, cats, k, stats, overall, overallBar, overallPass, detailed }, null, 2), 'utf8')
+  writeFileSync(outFile, JSON.stringify({ ranAt: new Date().toISOString(), nConvos, cats, k, stats, overall, overallBar, overallPass, resumedFrom, detailed }, null, 2), 'utf8')
   console.log(`\n[eval-locomo] 批调用失败：expand ${fails.expand} / answer ${fails.answer} / judge ${fails.judge}`)
   console.log(`[eval-locomo] 明细已写入 ${outFile}`)
   process.exit(0)

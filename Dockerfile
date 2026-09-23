@@ -39,4 +39,4 @@ USER node
 
 EXPOSE 7300
 
-CMD ["node", "--import", "tsx", "server/http.ts"]
+CMD ["sh", "-c", "node --import tsx ${MUNINN_ENTRY:-server/http.ts}"]

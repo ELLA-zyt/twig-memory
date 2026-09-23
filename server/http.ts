@@ -3,7 +3,7 @@
  *
  * REST API：
  *   POST /v1/ingest  { userId, text, title?, tags?[] } : 登记事件并做碰撞判定
- *   GET  /v1/context?userId=  : 叙事上下文包（含可注入 system prompt 的 promptText）
+ *   GET  /v1/context?userId=  : 叙事上下文包（promptText：多轮宿主注入本轮 user 消息头部；单轮无状态注入 system 末尾）
  *   GET  /v1/state?userId=    : 完整三层状态（调试 / 可视化用）
  *   GET  /v1/claims?userId=   : 认知层论断列表（用户可见）
  *   POST /v1/contest { userId, claimId, note } : 用户否决 → contested（非删除）
@@ -258,6 +258,17 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       const uid = String(body.userId ?? '')
       if (!uid) return send(res, 400, { error: 'userId 必填' })
+      // async=1：202 立即返回、后台执行。反刍是多段 LLM 串行（实测 >5 分钟），
+      // Zeabur 内网代理会掐断分钟级长响应——排程宿主（Mnemosyne cron）走异步点火，
+      // 结果经 twig 日志与状态落盘观测；不带 async 的调用保持同步语义不变。
+      if (body.async) {
+        void manager.reflect(uid)
+          .then((r) => console.log(`[reflect async] done user ${uid.slice(0, 8)}…:`,
+            `claims+${r.claimsCreated} rewrite+${r.claimsRewritten} counter+${r.counterSearched}`,
+            r.skipped.length ? `skipped[${r.skipped.join(',')}]` : ''))
+          .catch((err) => console.error(`[reflect async] failed user ${uid.slice(0, 8)}…:`, err instanceof Error ? err.message : String(err)))
+        return send(res, 202, { queued: true, userId: uid })
+      }
       const result = await manager.reflect(uid)
       return send(res, 200, result)
     }

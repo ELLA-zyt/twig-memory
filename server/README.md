@@ -30,6 +30,8 @@ npm run server:http          # http://localhost:7300
 ```bash
 # .env.local 或环境变量
 KIMI_API_KEY=sk-你的-Moonshot-API-Key
+# 主模型缺省 kimi-k2.6（现役）；换供应商须三件套同改：MUNINN_BASE_URL + MUNINN_API_KEY + MUNINN_MODEL
+# MUNINN_MODEL=deepseek-v4-flash   # 例：DeepSeek 官方（MUNINN_BASE_URL=https://api.deepseek.com）
 ```
 
 ## HTTP API
@@ -37,7 +39,7 @@ KIMI_API_KEY=sk-你的-Moonshot-API-Key
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/v1/ingest` | `{ userId, text, title?, tags?[] }` 登记事件并做碰撞判定 |
-| GET | `/v1/context?userId=` | 叙事上下文包，`promptText` 可直接注入宿主 agent 的 system prompt |
+| GET | `/v1/context?userId=` | 叙事上下文包；`promptText` 注入位置按接入形态选（两法等价），见下文「宿主 agent 的典型接法」 |
 | GET | `/v1/state?userId=` | 完整三层状态（调试/可视化用；支持 `page`/`limit` 对碎片分页） |
 | GET | `/v1/claims?userId=` | 认知层论断列表（用户默认全透明可见） |
 | POST | `/v1/contest` | `{ userId, claimId, note }` 用户否决 → contested（不删除、不假改） |
@@ -145,7 +147,11 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
 ## 宿主 agent 的典型接法
 
 1. 每轮对话结束后，把用户新表达的事实/状态变化 `memory_ingest` 给引擎。
-2. 每轮对话开始前（或定期）取 `memory_context`，把 `promptText` 注入 system prompt——
+2. 每轮对话开始前（或定期）取 `memory_context`，把 `promptText` 按接入形态注入（两法等价，按有没有跨轮历史要保护选）：
+   - **多轮常驻宿主**（host-loop / 长期接入）：拼进**本轮 user 消息头部**——system 只留稳定
+     人设、会话历史 append-only 且只存原文，变动块固定在末尾，前缀缓存跨轮命中
+     （参考实现 `server/host-loop.ts`）；
+   - **单轮无状态**（cron+curl、每次全新会话）：没有历史可保护，注入 system prompt 末尾即可。
    拿到的是「叙事上下文包」：进行中的线索 + 当前理解（带置信度）+ 近期事件，不是 top-k 卡片。
 3. 用户要求查看/更正记忆时，用 `memory_list_claims` / `memory_contest_claim`。
 4. 每天一次（或批量事件后）调用 `memory_reflect` / `POST /v1/reflect` 反刍：
@@ -178,7 +184,7 @@ args = ["tsx", "D:/kimi/workspace/muninn/server/mcp.ts"]
 2. **强制裁决留痕**：每条命中反证必须被显式回应——推翻 / 加限定 / 写明为什么不足以推翻，说明写入 `counterEvidence`，不许悄悄吞掉。
 3. **防教条化**：反证全部被「解释掉」时，代码强制置信度小幅衰减（-0.03，不信任 LLM 自律）；论断未改动也留版本记录，衰减可审计。
 
-异源配置：默认同模型 persona+温度异源；设置 `MUNINN_ADVERSARY_MODEL`（如 `moonshot-v1-32k`）
+异源配置：默认同模型 persona+温度异源；设置 `MUNINN_ADVERSARY_MODEL`（如 `deepseek-v4-flash`，跨供应商真异源）
 可让红队用第二模型，实现真正的模型异源。这是设计债务③的**缓解而非根治**——同源数据下
 的自我对抗天花板依然存在，已写进局限性。
 
@@ -294,11 +300,18 @@ npx tsx server/eval-locomo.ts --embed --k 15       # 混合检索：BM25 + 硅�
 及格线 = mem0 基线 × 90%（参照 arXiv:2604.04853 Table 11，LLM-judge，adversarial 单列）：
 single-hop ≥.604 / temporal ≥.500 / multi-hop ≥.460 / open-domain ≥.656 / 总分 ≥.602。
 
-**全量基线（2026-08-17，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 MiniMax M3 官方 API 直连）**：
+**历史锚点 · M3 时代口径（2026-08-17，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 MiniMax M3 官方 API 直连；不可与 v0.2.0 口径混引）**：
 1986 题零批调用失败——single-hop **0.800** / temporal **0.726** / multi-hop **0.504** / open-domain 0.531 / adversarial 0.843（单列不计入）；
 **总分 0.640**，双口径过线（四类及格线宏平均 0.5551、文档总分口径 0.602），高于 mem0 参照宏平均 0.617。
 open-domain（0.531 vs 0.729）为已知短板，差在跨碎片推断，已立项为下一靶子。
 mem0 数值为论文参照值、非同场裁判；对照结论以「参照口径」表述。
+
+**全量基线 v0.2.0（2026-09-10，r3 续跑卷，k=15，BM25+向量 RRF + HyDE，嵌入 BGE-M3 经硅基流动，作答/判分 glm-5-3-260801 火山方舟 Agent Plan `/api/plan/v3`）**：
+1986 题零单题尸体（前 3 会话经 `--resume` 从增量快照继承，conv-42 断网咬伤后剔除重跑，明细含 `resumedFrom` 溯源）——
+single-hop **0.838** / temporal **0.738** / multi-hop **0.539** / open-domain 0.563（仍未过线 0.656）/ adversarial 0.740（单列不计入；较 M3 基线 0.843 回落，疑与模型拒陷阱风格差异及末次低推理刹车偏好作答有关，待立项复查）；
+**总分 0.6695**，及格线 0.6019（文档总分口径）→ **PASS**，高于 mem0 参照宏平均 0.617。
+明细：`server/eval-data/locomo-result-1789082385558.json`（force-added，gitignored 目录破例入库）。
+查卷附注：adversarial 回落逐题定责为答题侧贪答（116/116 断言式作答、拒答判 0 为 0 道，judge 判据机械无口味问题），疑「would/likely 优先推断」条款对陷阱题误放行，待立项；open-domain 42 错中 20 拒答（「老实人税」叙事不变）；expand 唯一批失败（content_filter，conv-42 #230–239）受影响 10 题全在分母、零尸体。前 3 会话经 `--resume` 继承、conv-42 剔除断网咬伤后重跑，成绩跑于焊死前同一内容工作区，补丁内容与 commit `6e7118f` 一致。
 
 限流注意：LoCoMo 的 prompt 远大于冲突评测，免费档 TPM 很容易撞墙。管线已做三重防护
 （传输层 429 指数退避、批处理 10/5/5、批级二次重试），`--pace`（默认 12 秒）可再调慢；
@@ -346,7 +359,7 @@ session-level `answer_session_ids` 命中率，诊断用，abstention 题不计�
 `--embed` / `--no-hyde` / `--pace` / 作答判分模型切换与 LoCoMo 完全相同（共用 `.env.local`）。
 判分模型与官方不同（官方用 GPT-4o，本管线用 `MUNINN_MODEL`），对照结论以「参照口径」表述。
 
-**全量基线（2026-08-22，LongMemEval_S，commit `59352ea`）**：
+**历史锚点 · M3 时代口径（2026-08-22，LongMemEval_S，commit `59352ea`；不可与 v0.2.0 口径混引）**：
 k=15，BM25 + BGE-M3 向量 RRF + HyDE（嵌入经硅基流动），作答/判分 MiniMax M3（官方 API 直连）。
 500 题零批调用失败——
 single-session-user **1.000** / single-session-assistant **0.982** / knowledge-update **0.885** /
@@ -354,6 +367,17 @@ temporal-reasoning **0.820** / multi-session **0.812** / single-session-preferen
 **Task-averaged 0.844 / Overall 0.856 / Abstention 0.867**（26/30）。
 检索召回 turn-level **0.962** / session-level **0.989**。
 明细：`server/eval-data/longmemeval-s-result-1787405412219.json`（force-added，gitignored 目录破例入库）。
+
+**全量基线 v0.2.0（2026-09-10，LongMemEval_S，r7 零失败卷）**：
+k=15，BM25 + BGE-M3 向量 RRF + HyDE（嵌入经硅基流动），作答/判分 glm-5-3-260801（火山方舟 Agent Plan `/api/plan/v3`）。
+500 题零批失败、零单题尸体——
+single-session-user **1.000** / single-session-preference **0.933** / single-session-assistant **0.982** /
+temporal-reasoning **0.910** / knowledge-update **0.923** / multi-session **0.752** /
+**Task-averaged 0.9167 / Overall 0.892 / Abstention 0.900**（27/30）。
+检索召回 turn-level **0.972** / session-level **0.996**。
+口径变更（对照 M3 基线必读）：拒答条款收半格（相关性扳机 + 近似碎片护栏）、作答预算 2000/题、传输层空内容放大至 16000 + 末次低推理刹车；multi-session 0.752 处历史波动带（0.74~0.81）内，计数欠数随 HyDE 抽样摆动。
+明细：`server/eval-data/longmemeval-s-result-1788993683045.json`（force-added，gitignored 目录破例入库）；前一卷 r6（0.876，含 5 尸）不作正式成绩，验尸见同目录 NOTE.md。
+登记项：preference 剩 2 错（0edc2aef 检索未命中后拒答，属检索账；09d032c9 证据在手仍拒，属条款残余）；条款回火 2 道（dd2973ad 就寝时间 / 0977f2af 厨房小家电，均证据在手新增拒答）——净收益仍为 +12/-2。成绩跑于焊死前同一内容工作区，补丁内容与 commit `85cc113` 一致。
 
 ## 设计债务清偿对照表（对照设计文档 §9，更新于本仓库服务端）
 
@@ -367,7 +391,7 @@ temporal-reasoning **0.820** / multi-session **0.812** / single-session-preferen
 | ⑥ | 事实层修正标注 | **已清**：`/v1/correct`，原文不动，判定层经 fragView 见修正后事实 |
 | ⑦ | contested 再提门槛 | **已清**：≥3 独立新证据 + 14 天冷却 + 邀请式措辞 + 两否封存 + 打地鼠双守卫 |
 | ⑧ | 冲突测试集规范 | **已清**：22 例类型学数据集 + 机械盲评 + `eval-counter.ts` 跑批（基线 100%） |
-| ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.640，双口径过线（宏平均 0.5551 / 文档口径 0.602），超 mem0 参照宏平均 0.617；open-domain 未过线，已立项 |
+| ⑨ | LoCoMo 及格线量化 | **已清**：全量 10 会话 1986 题总分 0.6695（v0.2.0 口径），及格线 0.6019 过线，超 mem0 参照宏平均 0.617；open-domain 未过单科线，已立项 |
 | ⑪ | 合规声明文本 | **已清**：not-a-medical-device / 情感数据最小化 / 命名惯例附则，见 [docs/COMPLIANCE.md](../docs/COMPLIANCE.md) |
 
 ## MVP 简化声明（后续迭代方向）

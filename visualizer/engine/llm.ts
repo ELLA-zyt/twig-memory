@@ -5,7 +5,9 @@
  */
 
 const TIMEOUT_MS = 10000
-const MODEL = 'moonshot-v1-8k'
+/** 主模型随 MUNINN_MODEL（与 server/llm-node.ts 同口径，缺省现役 kimi-k2.6）。
+ *  浏览器侧无 process 全局，走 globalThis 探测，取不到即落缺省 */
+const MODEL = (globalThis as { process?: { env?: Record<string, string> } }).process?.env?.MUNINN_MODEL || 'kimi-k2.6'
 
 export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
 
@@ -13,7 +15,7 @@ export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: s
  *  opts.model 为按调用覆盖的模型名（异源反证生成用，缺省用默认模型） */
 export type ChatTransport = (
   messages: ChatMessage[],
-  opts?: { temperature?: number; maxTokens?: number; model?: string },
+  opts?: { temperature?: number; maxTokens?: number; model?: string; extraBody?: Record<string, unknown> },
 ) => Promise<string>
 
 let customTransport: ChatTransport | null = null
@@ -24,7 +26,7 @@ export function setChatTransport(t: ChatTransport | null): void {
 
 export async function moonshotChat(
   messages: ChatMessage[],
-  opts?: { temperature?: number; maxTokens?: number; model?: string },
+  opts?: { temperature?: number; maxTokens?: number; model?: string; extraBody?: Record<string, unknown> },
 ): Promise<string> {
   if (customTransport) return customTransport(messages, opts)
   const ctrl = new AbortController()
@@ -38,6 +40,7 @@ export async function moonshotChat(
         temperature: opts?.temperature ?? 0.3,
         max_tokens: opts?.maxTokens ?? 700,
         messages,
+        ...(opts?.extraBody ?? {}),
       }),
       signal: ctrl.signal,
     })
