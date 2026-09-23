@@ -183,13 +183,9 @@ function fetchJson(url, opts) {
   });
 }
 
-// 获取 API base（优先用当前域名，没有的话用 localStorage 存的）
+// 网页与 API 使用同域，由星图服务端代理到配置的后端。
 function getApiBase() {
-  // 如果是 file:// 或本地调试，用 localStorage
-  if (location.protocol === 'file:') {
-    return localStorage.getItem('twig_api_base') || 'https://yubai-memory.zeabur.app';
-  }
-  return ''; // 同域
+  return API_BASE;
 }
 
 // ===== 加载数据 =====
