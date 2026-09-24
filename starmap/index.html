@@ -3,548 +3,754 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>衔枝 · 记忆星空</title>
+<meta name="color-scheme" content="dark" />
+<title>记忆星空 · Memory Starmap</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a1a; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #e8e4d9; }
-  canvas { display: block; position: absolute; top: 0; left: 0; }
-
-  /* 顶部标题 */
-  .title {
-    position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
-    text-align: center; pointer-events: none; z-index: 10;
+  :root { color-scheme: dark; --ink:#e8ddf7; --muted:#9e90b5; --pink:#eaa7ec; --violet:#a797f4; --edge:rgba(188,151,227,.15); --side:368px; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none!important; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#090610; color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  button,input,select { font:inherit; }
+  button { cursor:pointer; }
+  button:disabled { cursor:wait; opacity:.6; }
+  button,input,select { -webkit-tap-highlight-color:transparent; }
+  button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:2px solid var(--pink); outline-offset:4px; }
+  button { color:inherit; }
+  #scene { position:absolute; inset:0 var(--side) 0 0; overflow:hidden; background:radial-gradient(ellipse at 54% 44%,#1c102f 0%,#100a1d 45%,#08060e 100%); }
+  #sky { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  .brand { position:absolute; top:38px; left:40px; pointer-events:none; }
+  .brand h1 { margin:0; font-size:23px; font-weight:450; letter-spacing:10px; background:linear-gradient(110deg,#d5b9ec,#eca8da 52%,#a9a5ed); background-clip:text; -webkit-background-clip:text; color:transparent; }
+  .brand p { margin:11px 0 0; font-size:9px; letter-spacing:4px; color:#a795bc; }
+  .edition { display:flex; align-items:center; gap:8px; margin-top:24px; font-size:9px; letter-spacing:2px; color:#7f6a99; }
+  .edition::before { content:""; width:20px; height:1px; background:#72578e; }
+  .scene-footer { position:absolute; bottom:30px; left:40px; right:34px; display:flex; align-items:end; justify-content:space-between; gap:15px; pointer-events:none; }
+  .count { font-size:11px; color:#b5a4ca; letter-spacing:1px; }
+  .count b { font-family:Georgia,serif; font-size:25px; font-weight:400; color:#e2c9ef; margin-right:7px; }
+  .breakdown { margin-top:8px; display:flex; flex-wrap:wrap; gap:11px; font-size:10px; color:#867595; }
+  .scene-tools { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; pointer-events:auto; }
+  .quiet-button { background:rgba(31,19,45,.7); border:1px solid var(--edge); border-radius:8px; padding:8px 10px; font-size:11px; color:#bcaace; }
+  .quiet-button:hover { background:#30203f; border-color:#68517e; }
+  .scene-message { position:absolute; top:48%; left:15%; right:15%; text-align:center; font-size:12px; line-height:2; letter-spacing:2px; color:#a38bb7; pointer-events:none; }
+  .scene-message b { display:block; font-size:17px; font-weight:400; color:#d1b7e4; margin-bottom:9px; }
+  .sidebar { position:absolute; top:0; right:0; bottom:0; width:var(--side); background:linear-gradient(160deg,rgba(27,17,40,.96),rgba(12,9,20,.98)); border-left:1px solid var(--edge); display:flex; flex-direction:column; box-shadow:-12px 0 45px rgba(10,5,20,.2); }
+  .sidebar-header { padding:37px 25px 18px; border-bottom:1px solid var(--edge); flex-shrink:0; }
+  .heading-row { display:flex; align-items:center; justify-content:space-between; }
+  .heading-row h2 { margin:0; font-size:18px; letter-spacing:5px; font-weight:450; }
+  .heading-row small { font:10px Georgia,serif; letter-spacing:2px; color:#867293; }
+  .section-caption { margin:9px 0 22px; font-size:9px; letter-spacing:2px; color:#80718e; }
+  .filters { display:flex; gap:5px; flex-wrap:wrap; }
+  .filter { padding:6px 10px; border:1px solid transparent; border-radius:16px; background:transparent; color:#a997bf; font-size:11px; }
+  .filter:hover { background:rgba(144,98,183,.1); }
+  .filter[aria-pressed="true"] { color:#f3e4ff; border-color:#8862ad; background:linear-gradient(115deg,#68448c,#493363); box-shadow:inset 0 1px rgba(255,255,255,.12); }
+  .sort-row { margin-top:17px; display:flex; align-items:center; justify-content:space-between; gap:9px; color:#897599; font-size:10px; }
+  .sort-row select { min-width:0; background:#1c1429; border:1px solid var(--edge); color:#b7a1cc; border-radius:7px; padding:5px 8px; font-size:10px; }
+  #sortNote { margin:9px 0 0; font-size:10px; line-height:1.6; color:#887697; }
+  #memoryList { flex:1; min-height:0; overflow-y:auto; padding:18px 18px 24px; scrollbar-width:thin; scrollbar-color:#4a355f transparent; }
+  .memory-card { display:block; width:100%; text-align:left; padding:17px 16px 14px; margin:0 0 11px; color:var(--ink); border:1px solid rgba(168,129,207,.12); border-radius:12px; background:linear-gradient(120deg,rgba(96,66,122,.12),rgba(52,35,70,.08)); transition:border-color .2s,background .2s; }
+  .memory-card:hover { background:rgba(100,65,137,.17); border-color:rgba(179,127,226,.35); }
+  .memory-card[aria-pressed="true"] { border-color:#b486d2; background:linear-gradient(130deg,rgba(124,73,151,.26),rgba(66,43,103,.23)); box-shadow:inset 3px 0 #d39de3; }
+  .card-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:11px; color:#9780ae; font-size:9px; letter-spacing:.7px; }
+  .type-label { display:flex; align-items:center; gap:6px; }
+  .type-dot { display:inline-block; width:4px; height:4px; border-radius:50%; background:var(--star-color); box-shadow:0 0 7px var(--star-color); flex-shrink:0; }
+  .card-title { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:0; font-size:13px; font-weight:450; line-height:1.7; color:#dacee9; }
+  .card-excerpt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:7px 0 0; color:#a18eaf; font-size:11px; line-height:1.8; }
+  .tags { display:flex; flex-wrap:wrap; gap:5px; margin-top:11px; }
+  .tag { display:inline-block; font-size:9px; line-height:1.5; color:#b8a1d9; background:rgba(140,93,188,.13); padding:3px 7px; border-radius:5px; max-width:100%; overflow-wrap:anywhere; }
+  .card-measure { display:block; margin-top:10px; color:#9681ac; font-size:10px; }
+  .list-empty { text-align:center; padding:42px 14px; line-height:2; font-size:12px; color:#9683a8; }
+  #listNav { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 20px; border-top:1px solid var(--edge); font-size:10px; color:var(--muted); flex-shrink:0; }
+  #listNav button { padding:6px 9px; }
+  .connection { padding:14px 22px 18px; border-top:1px solid var(--edge); background:rgba(10,6,17,.28); flex-shrink:0; font-size:11px; }
+  .connection summary { cursor:pointer; color:#ad97bf; display:flex; align-items:center; justify-content:space-between; list-style:none; padding:2px 0; }
+  .connection summary::-webkit-details-marker { display:none; }
+  .connection summary::after { content:"＋"; color:#977eac; }
+  .connection[open] summary::after { content:"−"; }
+  #connectionStatus { font-size:10px; color:#8f7c9f; margin-left:12px; }
+  #connectionForm { padding-top:14px; display:grid; grid-template-columns:1fr auto; gap:10px; }
+  #connectionForm label { display:block; grid-column:1/-1; color:#a48bb8; font-size:10px; }
+  #connectionForm input { display:block; width:100%; background:#110c1b; border:1px solid #392844; color:#e4d3f0; border-radius:6px; padding:8px 10px; margin-top:6px; font-size:12px; }
+  #connectionForm p { grid-column:1/-1; margin:0; color:#82708f; font-size:10px; line-height:1.7; }
+  #refreshButton { grid-column:1/-1; }
+  #errorMessage { color:#edb6d3; line-height:1.7; margin:10px 0 0; font-size:11px; overflow-wrap:anywhere; }
+  #panelToggle { position:absolute; right:var(--side); top:48%; z-index:5; border:1px solid #493059; border-right:0; background:rgba(43,25,64,.9); color:#bfa4d6; border-radius:9px 0 0 9px; writing-mode:vertical-rl; letter-spacing:3px; padding:17px 8px; font-size:10px; }
+  body.panel-closed { --side:0px; }
+  body.panel-closed .sidebar { display:none; }
+  #tooltip { position:absolute; z-index:8; max-width:250px; padding:13px 15px; border:1px solid #644675; border-radius:9px; background:rgba(24,14,37,.96); box-shadow:0 8px 30px #08040e55; pointer-events:none; }
+  #tooltip .tip-type { display:block; color:#c292d7; font-size:9px; letter-spacing:2px; margin-bottom:6px; }
+  #tooltip strong { font-size:12px; font-weight:450; line-height:1.5; display:block; }
+  #tooltip p { font-size:11px; line-height:1.7; color:#b29ac5; margin:6px 0 0; }
+  .detail { flex-shrink:0; max-height:46%; overflow-y:auto; padding:20px 23px; border-top:1px solid #6b467e; background:linear-gradient(125deg,#251530,#161021); scrollbar-width:thin; scrollbar-color:#4a355f transparent; }
+  .detail-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #detailType { font-size:9px; color:#c799dd; letter-spacing:2px; }
+  #detailTitle { font-size:15px; line-height:1.8; font-weight:450; margin:10px 0; overflow-wrap:anywhere; }
+  #detailDate { color:#9f87af; font-size:10px; }
+  #detailBody { font-size:12px; line-height:1.9; color:#c4afd1; white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
+  #detailExtra { white-space:pre-wrap; font-size:11px; line-height:1.8; color:#a98fb9; }
+  #detailMeter { width:100%; height:3px; accent-color:#d99fe6; display:block; margin-top:8px; }
+  .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  @media (min-width:1500px) { :root { --side:400px; } .sidebar-header { padding-top:43px; } .brand { left:48px; top:43px; } }
+  @media (max-width:1050px) and (min-width:761px) { :root { --side:320px; } .brand { left:26px; } .scene-footer { left:26px; right:20px; } .scene-tools { flex-direction:column; } }
+  @media (max-width:760px) {
+    :root { --side:0px; }
+    #scene { bottom:46%; }
+    .brand { left:22px; top:23px; }
+    .brand h1 { font-size:19px; letter-spacing:7px; }
+    .brand p { font-size:8px; letter-spacing:3px; margin-top:8px; }
+    .edition { display:none; }
+    .scene-footer { left:22px; bottom:37px; right:18px; }
+    .count b { font-size:21px; }
+    .breakdown { font-size:9px; gap:7px; }
+    .scene-tools { max-width:160px; gap:5px; }
+    .scene-tools .quiet-button { padding:7px; font-size:10px; }
+    .sidebar { top:54%; width:100%; border-left:0; border-top:1px solid var(--edge); }
+    .sidebar-header { padding:15px 20px 11px; }
+    .heading-row h2 { font-size:15px; letter-spacing:3px; }
+    .section-caption { display:none; }
+    .filters { margin-top:12px; }
+    .sort-row { margin-top:10px; }
+    #sortNote { margin-top:5px; }
+    #memoryList { padding:12px 16px; }
+    .connection { padding:10px 18px; }
+    #panelToggle { writing-mode:horizontal-tb; top:calc(54% - 27px); right:0; border-radius:8px 0 0 0; padding:6px 12px; font-size:10px; }
+    body.panel-closed #scene { bottom:0; }
+    body.panel-closed #panelToggle { top:auto; bottom:88px; }
+    .detail { position:absolute; inset:0; max-height:none; z-index:3; padding:18px 22px; }
+    .connection[open] { position:absolute; inset:0; z-index:4; background:#170e22; overflow:auto; }
   }
-  .title h1 { font-size: 22px; font-weight: 300; letter-spacing: 8px; color: #d4c5a0; text-shadow: 0 0 20px rgba(212,197,160,0.3); }
-  .title p { font-size: 11px; letter-spacing: 4px; color: #7a7a9a; margin-top: 6px; }
-
-  /* 底部统计 */
-  .stats {
-    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 32px; font-size: 12px; color: #8a8aaa; z-index: 10;
-  }
-  .stats span b { color: #d4c5a0; font-weight: 400; font-size: 14px; margin-right: 4px; }
-
-  /* 配置面板 */
-  .config {
-    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 8px; align-items: center; z-index: 10;
-    background: rgba(20,20,40,0.6); padding: 8px 14px; border-radius: 20px;
-    backdrop-filter: blur(10px); border: 1px solid rgba(212,197,160,0.15);
-  }
-  .config input {
-    background: transparent; border: none; outline: none;
-    color: #e8e4d9; font-size: 12px; width: 120px;
-    border-bottom: 1px solid rgba(212,197,160,0.2); padding: 2px 4px;
-  }
-  .config input::placeholder { color: #5a5a7a; }
-  .config button {
-    background: rgba(212,197,160,0.15); border: 1px solid rgba(212,197,160,0.3);
-    color: #d4c5a0; padding: 4px 12px; border-radius: 12px;
-    font-size: 11px; cursor: pointer; transition: all 0.2s;
-  }
-  .config button:hover { background: rgba(212,197,160,0.25); }
-
-  /* 信息面板 */
-  .info-panel {
-    position: absolute; top: 50%; right: 40px; transform: translateY(-50%);
-    width: 320px; max-height: 70vh; overflow-y: auto;
-    background: rgba(15,15,35,0.85); backdrop-filter: blur(12px);
-    border: 1px solid rgba(212,197,160,0.2); border-radius: 12px;
-    padding: 24px; z-index: 20; opacity: 0; pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-  .info-panel.show { opacity: 1; pointer-events: auto; }
-  .info-panel .close {
-    position: absolute; top: 12px; right: 16px;
-    color: #7a7a9a; cursor: pointer; font-size: 18px;
-  }
-  .info-panel .kicker { font-size: 10px; letter-spacing: 3px; color: #8a7a5a; margin-bottom: 8px; }
-  .info-panel h2 { font-size: 18px; font-weight: 400; color: #d4c5a0; margin-bottom: 12px; }
-  .info-panel .date { font-size: 11px; color: #6a6a8a; margin-bottom: 14px; }
-  .info-panel .body { font-size: 13px; line-height: 1.8; color: #c0bca8; white-space: pre-wrap; }
-  .info-panel .tags { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .info-panel .tag {
-    font-size: 10px; padding: 2px 8px; border-radius: 10px;
-    background: rgba(212,197,160,0.1); color: #b0a080;
-    border: 1px solid rgba(212,197,160,0.2);
-  }
-  .info-panel .threads { margin-top: 12px; font-size: 11px; color: #6a6a8a; }
-  .info-panel .conviction { margin-top: 12px; font-size: 11px; color: #8a7a5a; }
-  .info-panel .conviction-bar {
-    width: 100%; height: 3px; background: rgba(212,197,160,0.1);
-    border-radius: 2px; margin-top: 6px; overflow: hidden;
-  }
-  .info-panel .conviction-fill {
-    height: 100%; background: linear-gradient(90deg, #d4c5a0, #f0e6c8);
-    border-radius: 2px;
-  }
-
-  /* 图例 */
-  .legend {
-    position: absolute; top: 28px; right: 28px; z-index: 10;
-    font-size: 11px; color: #7a7a9a; text-align: right;
-  }
-  .legend .item { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 6px; }
-  .legend .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .legend .dot.fragment { background: #a0a0c0; box-shadow: 0 0 6px #a0a0c0; }
-  .legend .dot.thread { background: #7ac5a0; box-shadow: 0 0 6px #7ac5a0; }
-  .legend .dot.claim { background: #f0d890; box-shadow: 0 0 10px #f0d890; }
-
-  /* 加载 */
-  .loading {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    font-size: 13px; color: #6a6a8a; letter-spacing: 2px; z-index: 5;
-  }
-
-  @media (max-width: 768px) {
-    .info-panel { right: 10px; left: 10px; width: auto; transform: translateY(-50%); }
-    .stats { gap: 16px; font-size: 10px; }
-    .config input { width: 80px; }
-    .legend { display: none; }
-  }
+  @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
 </style>
 </head>
 <body>
-
-<canvas id="sky"></canvas>
-
-<div class="title">
-  <h1>记忆星空</h1>
-  <p>TWIG · STARMAP</p>
-</div>
-
-<div class="legend">
-  <div class="item"><span>记忆碎片</span><span class="dot fragment"></span></div>
-  <div class="item"><span>线索星座</span><span class="dot thread"></span></div>
-  <div class="item"><span>认知亮星</span><span class="dot claim"></span></div>
-</div>
-
-<div class="loading" id="loading">星图正在绘制…</div>
-
-<div class="stats" id="stats" style="display:none">
-  <span><b id="countFragments">0</b>碎片</span>
-  <span><b id="countThreads">0</b>线索</span>
-  <span><b id="countClaims">0</b>认知</span>
-</div>
-
-<div class="config">
-  <input type="text" id="userIdInput" placeholder="userId" value="muqiu" />
-  <input type="text" id="tokenInput" placeholder="auth token（可选）" />
-  <button onclick="loadData()">刷新</button>
-</div>
-
-<div class="info-panel" id="infoPanel">
-  <span class="close" onclick="closePanel()">×</span>
-  <div class="kicker" id="infoKicker">FRAGMENT</div>
-  <h2 id="infoTitle">标题</h2>
-  <div class="date" id="infoDate"></div>
-  <div class="body" id="infoBody"></div>
-  <div class="tags" id="infoTags"></div>
-  <div class="threads" id="infoThreads"></div>
-  <div class="conviction" id="infoConviction" style="display:none">
-    置信度
-    <div class="conviction-bar"><div class="conviction-fill" id="convictionFill"></div></div>
+<main id="scene" aria-label="记忆星空">
+  <canvas id="sky" tabindex="0" aria-label="动态记忆星图，可拖动旋转、滚轮缩放、双击空白复位，也可通过右侧记忆列表选择相同内容"></canvas>
+  <header class="brand"><h1>记忆星空</h1><p>MEMORY · STARMAP</p><div class="edition">每一颗星，都是记得的瞬间</div></header>
+  <div class="scene-message" id="sceneMessage" role="status">正在连接你的记忆星空…</div>
+  <div class="scene-footer">
+    <div><div class="count"><b id="visibleCount">0</b><span id="countLabel">颗记忆星辰</span></div><div class="breakdown"><span id="countFragments">0 碎片</span><span id="countThreads">0 线索</span><span id="countClaims">0 认知</span></div></div>
+    <div class="scene-tools"><button class="quiet-button" id="resetView" type="button" title="恢复默认视角（画布获得焦点时也可按 Home）">复位 · <span id="zoomValue">100%</span></button><button class="quiet-button" id="motionButton" type="button" aria-pressed="false">暂停动态</button><button class="quiet-button" id="connectionButton" type="button">连接设置</button></div>
   </div>
-</div>
-
+  <div id="tooltip" hidden role="tooltip"><span class="tip-type" id="tipType"></span><strong id="tipTitle"></strong><p id="tipBody"></p></div>
+</main>
+<button id="panelToggle" type="button" aria-expanded="true" aria-controls="sidebar">收起列表 ›</button>
+<aside class="sidebar" id="sidebar" aria-label="全部记忆列表">
+  <header class="sidebar-header">
+    <div class="heading-row"><h2>全部记忆</h2><small id="listTotal">00</small></div>
+    <p class="section-caption">THE CONSTELLATION OF YOU</p>
+    <div class="filters" role="group" aria-label="记忆类型">
+      <button class="filter" data-filter="all" aria-pressed="true">全部</button>
+      <button class="filter" data-filter="fragment" aria-pressed="false">记忆碎片</button>
+      <button class="filter" data-filter="thread" aria-pressed="false">线索</button>
+      <button class="filter" data-filter="claim" aria-pressed="false">认知</button>
+    </div>
+    <div class="sort-row"><label for="sortSelect">排列方式</label><select id="sortSelect"><option value="time">按时间 · 最近优先</option><option value="emotion">按情绪强度 · 碎片优先</option></select></div>
+    <p id="sortNote">缺少完整日期的记忆排在后面。</p>
+  </header>
+  <div id="memoryList" aria-label="记忆卡片"></div>
+  <nav id="listNav" hidden aria-label="列表分页"><button class="quiet-button" id="prevPage">上一页</button><span id="pageLabel"></span><button class="quiet-button" id="nextPage">下一页</button></nav>
+  <section class="detail" id="detailPanel" hidden aria-label="选中记忆详情">
+    <div class="detail-head"><span id="detailType"></span><button class="quiet-button" id="closeDetail" aria-label="关闭记忆详情">关闭 ×</button></div>
+    <h3 id="detailTitle"></h3><div id="detailDate"></div><div id="detailBody"></div><div class="tags" id="detailTags"></div><div id="detailExtra"></div><progress id="detailMeter" max="1" hidden aria-label="认知置信度"></progress>
+  </section>
+  <details class="connection" id="connectionPanel">
+    <summary><span>连接与访问<span id="connectionStatus">未连接</span></span></summary>
+    <form id="connectionForm">
+      <label>用户 ID<input id="userIdInput" type="text" value="muqiu" placeholder="muqiu" autocomplete="off" /></label>
+      <label>访问令牌<input id="tokenInput" type="password" placeholder="auth token（可选）" autocomplete="off" /></label>
+      <p>令牌沿用浏览器本地保存，仅发送给当前站点的 API 代理。</p>
+      <button class="quiet-button" id="refreshButton" type="submit">连接 / 刷新记忆</button>
+    </form>
+    <p id="errorMessage" hidden role="alert"></p>
+  </details>
+</aside>
+<div class="sr-only" id="selectionAnnouncement" aria-live="polite"></div>
 <script>
-// ===== 配置 =====
-const API_BASE = ''; // 走同域
-let userId = 'muqiu';
-let authToken = '';
-
-// ===== Canvas 初始化 =====
-const canvas = document.getElementById('sky');
-const ctx = canvas.getContext('2d');
-let W, H;
-
-function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-}
-resize();
-window.addEventListener('resize', resize);
-
-// ===== 数据 =====
-let fragments = [];
-let threads = [];
-let claims = [];
-let stars = []; // 渲染用的星星数组
-let threadStars = []; // 线索星座
-let claimStars = []; // 认知亮星
-
-// ===== 工具函数 =====
+'use strict';
+// 1. Existing API contract: same-origin /v1/state + userId + optional Bearer token.
+const API_BASE = '';
+let userId = 'muqiu', authToken = '';
+let fragments = [], threads = [], claims = [];
 function fetchJson(url, opts) {
   const headers = { 'Content-Type': 'application/json', ...(opts?.headers || {}) };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
   return fetch(url, { ...opts, headers }).then(r => {
-    if (!r.ok) throw new Error(r.statusText);
+    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
     return r.json();
   });
 }
-
-// 网页与 API 使用同域，由星图服务端代理到配置的后端。
-function getApiBase() {
-  return API_BASE;
-}
-
-// ===== 加载数据 =====
-function loadData() {
-  userId = document.getElementById('userIdInput').value || 'muqiu';
-  authToken = document.getElementById('tokenInput').value || '';
-  localStorage.setItem('twig_user_id', userId);
-  if (authToken) localStorage.setItem('twig_auth_token', authToken);
-
-  document.getElementById('loading').style.display = 'block';
-
-  const base = getApiBase();
-  fetchJson(`${base}/v1/state?userId=${encodeURIComponent(userId)}`)
-    .then(data => {
-      fragments = data.fragments || [];
-      threads = data.threads || [];
-      claims = data.claims || [];
-      buildStars();
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('stats').style.display = 'flex';
-      document.getElementById('countFragments').textContent = fragments.length;
-      document.getElementById('countThreads').textContent = threads.length;
-      document.getElementById('countClaims').textContent = claims.length;
-    })
-    .catch(err => {
-      document.getElementById('loading').textContent = '加载失败：' + err.message + '（请检查 token 或 userId）';
-    });
-}
-
-// ===== 构建星星位置 =====
-function buildStars() {
-  stars = [];
-  threadStars = [];
-  claimStars = [];
-
-  const cx = W / 2;
-  const cy = H / 2;
-
-  // 碎片星：分布在整个天球（投影到2D）
-  // 使用球面坐标投影，营造立体星空感
-  fragments.forEach((f, i) => {
-    // 均匀分布在球面上
-    const phi = Math.acos(-1 + (2 * i) / fragments.length);
-    const theta = Math.sqrt(fragments.length * Math.PI) * phi;
-    const r = Math.min(W, H) * 0.35 + Math.random() * 40;
-
-    // 投影到2D
-    const x = cx + r * Math.sin(phi) * Math.cos(theta);
-    const y = cy + r * Math.sin(phi) * Math.sin(theta) * 0.8; // 压扁一点
-    const z = r * Math.cos(phi); // 深度
-
-    stars.push({
-      id: f.id,
-      type: 'fragment',
-      data: f,
-      x, y, z,
-      baseSize: 1.2 + Math.random() * 0.8,
-      twinkle: Math.random() * Math.PI * 2,
-      twinkleSpeed: 0.01 + Math.random() * 0.02,
-      brightness: 0.4 + Math.random() * 0.4,
-    });
-  });
-
-  // 线索星座：核心星 + 连线
-  threads.forEach((t, ti) => {
-    const phi = (ti / threads.length) * Math.PI * 2 + Math.random() * 0.3;
-    const r = Math.min(W, H) * 0.25 + ti * 20;
-    const x = cx + r * Math.cos(phi);
-    const y = cy + r * Math.sin(phi) * 0.75;
-
-    const coreStar = {
-      id: t.id,
-      type: 'thread',
-      data: t,
-      x, y, z: 0,
-      baseSize: 2.5,
-      twinkle: Math.random() * Math.PI * 2,
-      twinkleSpeed: 0.015,
-      brightness: 0.8,
-      memberStars: [],
-    };
-
-    // 关联的碎片星作为成员
-    if (t.history && t.history.length > 0) {
-      t.history.forEach((h, hi) => {
-        // 在核心星周围找对应的碎片星 或 生成成员星位置
-        const angle = (hi / t.history.length) * Math.PI * 2 + phi;
-        const dist = 30 + Math.random() * 50;
-        const mx = x + Math.cos(angle) * dist;
-        const my = y + Math.sin(angle) * dist * 0.8;
-
-        coreStar.memberStars.push({ x: mx, y: my, fragmentId: h.fragmentId });
-      });
+function getApiBase() { return API_BASE; }
+const $ = id => document.getElementById(id);
+function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
+let requestVersion = 0, requestController, loaded = false, loading = false;
+async function loadData() {
+  const version = ++requestVersion;
+  requestController?.abort(); requestController = new AbortController();
+  const nextUser = $('userIdInput').value.trim() || 'muqiu';
+  const changedUser = nextUser !== userId;
+  userId = nextUser; authToken = $('tokenInput').value || '';
+  remember('twig_user_id', userId); remember('twig_auth_token', authToken);
+  $('userIdInput').value = userId;
+  loading = true;
+  $('refreshButton').disabled = true; $('refreshButton').textContent = '正在连接…';
+  $('connectionStatus').textContent = '连接中'; $('errorMessage').hidden = true;
+  if (changedUser) { fragments=[]; threads=[]; claims=[]; loaded=false; closeSelection(); buildEntries(); applyView(); }
+  updateMessage();
+  try {
+    const data = await fetchJson(getApiBase() + '/v1/state?userId=' + encodeURIComponent(userId), { signal:requestController.signal });
+    if (version !== requestVersion) return;
+    if (!data || !['fragments','threads','claims'].every(k => Array.isArray(data[k]))) throw new Error('记忆数据格式不正确');
+    fragments=data.fragments; threads=data.threads; claims=data.claims; loaded=true;
+    buildEntries(); applyView();
+    if (selectedKey && entryMap.has(selectedKey)) showDetail(entryMap.get(selectedKey));
+    $('connectionStatus').textContent = '已连接';
+  } catch (error) {
+    if (version !== requestVersion || error.name === 'AbortError') return;
+    $('connectionStatus').textContent = loaded ? '刷新失败 · 显示上次数据' : '连接失败';
+    $('errorMessage').textContent = '加载失败：' + error.message + '。请检查用户 ID、令牌或服务连接。';
+    $('errorMessage').hidden = false; $('connectionPanel').open = true;
+  } finally {
+    if (version === requestVersion) {
+      loading=false; $('refreshButton').disabled=false; $('refreshButton').textContent='连接 / 刷新记忆';
+      updateMessage(); invalidate();
     }
-
-    threadStars.push(coreStar);
-  });
-
-  // 认知亮星：更大 更亮 位置偏外围
-  claims.forEach((c, ci) => {
-    const angle = (ci / Math.max(claims.length, 1)) * Math.PI * 2 + 0.5;
-    const r = Math.min(W, H) * 0.42 + ci * 15;
-    const x = cx + r * Math.cos(angle);
-    const y = cy + r * Math.sin(angle) * 0.75;
-
-    claimStars.push({
-      id: c.id,
-      type: 'claim',
-      data: c,
-      x, y, z: -10,
-      baseSize: 4 + c.conviction * 2,
-      twinkle: Math.random() * Math.PI * 2,
-      twinkleSpeed: 0.008,
-      brightness: 0.9 + c.conviction * 0.1,
-      conviction: c.conviction,
-    });
-  });
+  }
 }
 
-// ===== 渲染 =====
-let rotation = 0;
-let mouseX = 0, mouseY = 0;
-let hoveredStar = null;
+// 2. Read-only view models. No invented importance score or write-back to API data.
+const TYPES = {
+  fragment:{label:'记忆碎片',en:'FRAGMENT',color:'#d9a1ef',rgb:'217,161,239'},
+  thread:{label:'线索星座',en:'THREAD',color:'#aaa0ff',rgb:'170,160,255'},
+  claim:{label:'认知亮星',en:'CLAIM',color:'#f0a0d3',rgb:'240,160,211'},
+};
+const unit = v => typeof v === 'number' && Number.isFinite(v) ? Math.max(0,Math.min(1,v)) : null;
+const percent = v => unit(v) === null ? '未提供' : Math.round(unit(v)*100)+'%';
+const text = v => v == null ? '' : String(v);
+const array = v => Array.isArray(v) ? v : [];
+function fullDate(v) {
+  if (typeof v !== 'string' || !/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(v)) return null;
+  const n=Date.parse(v); return Number.isFinite(n)?n:null;
+}
+function latest(values) { const valid=values.filter(v=>v!==null); return valid.length?Math.max(...valid):null; }
+let entries=[], entryMap=new Map(), filtered=[], fieldEntries=[], selectedKey=null;
+let filter='all', sort='time', pageIndex=0;
+const PAGE_SIZE=36;
+function buildEntries() {
+  const byFragment=new Map(fragments.map(f=>[String(f.id),f]));
+  const old=new Map(entries.map(e=>[e.key,e]));
+  entries=[];
+  const add=(type,data,index,title,body,date,emotion,tags)=>{
+    if (!data || data.id == null) return;
+    const key=type+':'+String(data.id), meta=TYPES[type];
+    const e={key,type,data,title:text(title),body:text(body),date,emotion,tags:array(tags),index,meta};
+    e.orbit=old.get(key)?.orbit || makeOrbit(key);
+    entries.push(e);
+  };
+  fragments.forEach((f,i)=>add('fragment',f,i,f.title||'无题记忆',f.body||'',fullDate(f.dateLabel),unit(f.vad?.arousal),f.tags));
+  threads.forEach((t,i)=>add('thread',t,i,t.label||t.id,t.openQuestion||'一条正在延续的线索',
+    latest(array(t.history).map(h=>fullDate(byFragment.get(String(h.fragmentId))?.dateLabel))),null,[]));
+  claims.forEach((c,i)=>add('claim',c,i,c.docTitle||c.text||c.id,c.text||'',
+    latest(array(c.versions).map(v=>fullDate(v.at))),null,[]));
+  entryMap=new Map(entries.map(e=>[e.key,e]));
+}
+function applyView() {
+  filtered=entries.filter(e=>filter==='all'||e.type===filter);
+  filtered.sort((a,b)=>{
+    const av=sort==='emotion'?a.emotion:a.date, bv=sort==='emotion'?b.emotion:b.date;
+    if(av===null&&bv!==null)return 1;if(av!==null&&bv===null)return -1;
+    return (bv??0)-(av??0)||a.key.localeCompare(b.key);
+  });
+  // Rendering order is independent from list order, keeping orbits stable.
+  fieldEntries=entries.filter(e=>filter==='all'||e.type===filter);
+  if(selectedKey&&!fieldEntries.some(e=>e.key===selectedKey))closeSelection();
+  pageIndex=Math.min(pageIndex,Math.max(0,Math.ceil(filtered.length/PAGE_SIZE)-1));
+  document.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===filter)));
+  $('sortNote').textContent=sort==='emotion'?'仅按碎片的唤醒强度排序；其他类型与缺失值置后。':'线索按关联碎片、认知按版本更新时间；无完整日期置后。';
+  $('visibleCount').textContent=filtered.length;
+  $('countLabel').textContent=filter==='all'?'颗记忆星辰':' / '+entries.length+' 颗记忆星辰';
+  $('listTotal').textContent=String(filtered.length).padStart(2,'0');
+  $('countFragments').textContent=fragments.length+' 碎片';
+  $('countThreads').textContent=threads.length+' 线索';
+  $('countClaims').textContent=claims.length+' 认知';
+  renderList(); updateMessage(); hideTooltip(); invalidate();
+}
+function node(tag,cls,content) { const n=document.createElement(tag);if(cls)n.className=cls;if(content!=null)n.textContent=content;return n; }
+function dateLabel(e) {
+  if(e.type==='fragment')return text(e.data.dateLabel)||'日期未提供';
+  return e.date===null?'日期未提供':new Date(e.date).toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'});
+}
+function renderList() {
+  const list=$('memoryList'),frag=document.createDocumentFragment();
+  const start=pageIndex*PAGE_SIZE;
+  for(const e of filtered.slice(start,start+PAGE_SIZE)){
+    const card=node('button','memory-card');card.type='button';card.dataset.key=e.key;
+    card.style.setProperty('--star-color',e.meta.color);card.setAttribute('aria-pressed',String(e.key===selectedKey));
+    const meta=node('span','card-meta'),type=node('span','type-label');
+    type.append(node('i','type-dot'),document.createTextNode(e.meta.label));meta.append(type,node('span','',dateLabel(e)));
+    card.append(meta,node('span','card-title',e.title),node('span','card-excerpt',e.body));
+    if(e.tags.length){const tags=node('span','tags');for(const tag of e.tags.slice(0,3))tags.append(node('span','tag',tag));card.append(tags);}
+    if(e.type==='claim')card.append(node('span','card-measure','置信度 '+percent(e.data.conviction)));
+    if(sort==='emotion'&&e.type==='fragment')card.append(node('span','card-measure','情绪唤醒强度 '+percent(e.emotion)));
+    card.addEventListener('click',()=>selectEntry(e.key,'card'));frag.append(card);
+  }
+  if(!filtered.length)frag.append(node('p','list-empty',loading?'正在读取记忆…':!loaded?'连接后，记忆会在这里展开。':entries.length?'这个分类暂时没有记忆。':'这里还没有记忆，等待下一颗星亮起。'));
+  list.replaceChildren(frag);
+  const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+  $('listNav').hidden=pages<=1;$('pageLabel').textContent=(pageIndex+1)+' / '+pages;
+  $('prevPage').disabled=pageIndex===0;$('nextPage').disabled=pageIndex>=pages-1;
+}
+function showDetail(e) {
+  $('detailPanel').hidden=false;$('detailType').textContent=e.meta.en+' · '+e.meta.label;
+  $('detailTitle').textContent=e.title;$('detailDate').textContent=dateLabel(e);
+  $('detailBody').textContent=e.body;$('detailTags').replaceChildren();$('detailMeter').hidden=true;
+  const d=e.data;let extra='';
+  if(e.type==='fragment'){
+    for(const tag of e.tags)$('detailTags').append(node('span','tag',tag));
+    extra=array(d.threadIds).length?'关联线索：'+d.threadIds.join('、'):'';
+  } else if(e.type==='thread'){
+    extra='状态：'+text(d.status||'未知')+'\n关联事件数量：'+array(d.history).length+'\n脉络深度：'+text(d.dragonVein??'未提供');
+  } else {
+    const versions=array(d.versions),v=versions[versions.length-1];
+    extra='边界：'+text(d.boundary||'未提供')+'\n置信度：'+percent(d.conviction);
+    if(v)extra+='\n最新更新：'+text(v.at)+'\n变化原因：'+text(v.reason||'—');
+    if(unit(d.conviction)!==null){$('detailMeter').hidden=false;$('detailMeter').value=unit(d.conviction);}
+  }
+  $('detailExtra').textContent=extra;
+}
+function selectEntry(key,source) {
+  const e=entryMap.get(key);if(!e)return;
+  selectedKey=key;focusPulse=paused||reduced?0:1;hideTooltip();setPanel(true);
+  pageIndex=Math.floor(Math.max(0,filtered.findIndex(x=>x.key===key))/PAGE_SIZE);
+  renderList();showDetail(e);
+  requestAnimationFrame(()=>{
+    resize();
+    const card=[...$('memoryList').children].find(c=>c.dataset.key===key);
+    if(card){const list=$('memoryList');list.scrollTo({top:Math.max(0,card.offsetTop-list.offsetTop-12),behavior:reduced?'auto':'smooth'});}
+    if(source==='card')focusEntry(key);
+  });
+  $('selectionAnnouncement').textContent='已选择'+e.meta.label+'：'+e.title;invalidate();
+}
+function closeSelection() {
+  selectedKey=null;$('detailPanel').hidden=true;
+  document.querySelectorAll('.memory-card[aria-pressed="true"]').forEach(c=>c.setAttribute('aria-pressed','false'));
+  invalidate();
+}
+function updateMessage() {
+  const el=$('sceneMessage');
+  el.hidden=fieldEntries.length>0;
+  el.textContent=loading?'正在连接你的记忆星空…':!loaded?'打开连接设置，让记忆在这里亮起。':entries.length?'这个分类的星空暂时安静。':'星空已就绪，等待第一颗记忆星辰。';
+}
+function setPanel(open) {
+  document.body.classList.toggle('panel-closed',!open);
+  $('panelToggle').setAttribute('aria-expanded',String(open));$('panelToggle').textContent=open?'收起列表 ›':'‹ 全部记忆';
+  requestAnimationFrame(resize);
+}
 
-document.addEventListener('mousemove', (e) => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-  checkHover();
+// 3. World orbits and an orthographic camera are independent of API/list state.
+const canvas=$('sky'),ctx=canvas.getContext('2d',{alpha:false});
+let W=1,H=1,DPR=1,backgroundLayers=null,sprites=new Map(),projected=[];
+let hoverKey=null,pointer={x:-1000,y:-1000,inside:false};
+let clock=0,lastFrame=0,raf=0,dirty=true,focusPulse=0,slowFrames=0,frameStep=0,paintedAt=0,backgroundQuality=1;
+let paused=false;
+const media=matchMedia('(prefers-reduced-motion: reduce)');
+let reduced=media.matches;
+// Once per tab session; no memory data or credentials are stored here.
+let openingActive=!reduced;
+try { openingActive=openingActive&&!sessionStorage.getItem('starmap-opening-v1');sessionStorage.setItem('starmap-opening-v1','1'); } catch {}
+const openingStart=performance.now(),brand=document.querySelector('.brand');
+let openingTime=openingActive?0:4;
+if(openingActive)brand.style.opacity='0';
+function reveal(start,end){const t=Math.max(0,Math.min(1,(openingTime-start)/(end-start)));return t*t*(3-2*t);}
+function finishOpening(){openingActive=false;openingTime=4;brand.style.removeProperty('opacity');}
+// The opening never captures input: any deliberate interaction reveals the full scene.
+for(const event of ['pointerdown','wheel','keydown'])document.addEventListener(event,()=>{if(openingActive){finishOpening();invalidate();}},{capture:true,passive:true});
+const CAMERA_LIMITS={minZoom:.65,maxZoom:3,pitch:.82};
+const TAU=Math.PI*2;
+const camera={yaw:0,pitch:0,zoom:1,panX:0,panY:0};
+const cameraTarget={...camera};
+const angularVelocity={yaw:0,pitch:0};
+let dragState=null,zoomAnchor=null,focusTransition=null,suppressClick=false,lastDragAt=-Infinity,zoomLabel='';
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
+function random(seed){let n=seed;return()=>{n+=0x6D2B79F5;let t=n;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
+function makeOrbit(key){
+  const r=random(hash(key));
+  const tilt=(r()-.5)*2.5,node=r()*TAU;
+  return {radius:.18+Math.pow(r(),.65)*.75,phase:r()*TAU,tilt,node,
+    ct:Math.cos(tilt),st:Math.sin(tilt),cn:Math.cos(node),sn:Math.sin(node),
+    depth:(r()-.5)*.48,offsetY:(r()-.5)*.25,ellipse:.72+r()*.27,
+    speed:.007+r()*.009,twinkle:r()*TAU,frequency:.35+r()*.6};
+}
+function sprite(type){
+  if(sprites.has(type))return sprites.get(type);
+  const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),rgb=TYPES[type].rgb;
+  let grad=g.createRadialGradient(64,64,0,64,64,61);
+  grad.addColorStop(0,'rgba('+rgb+',.34)');grad.addColorStop(.2,'rgba('+rgb+',.13)');grad.addColorStop(.6,'rgba('+rgb+',.025)');grad.addColorStop(1,'rgba('+rgb+',0)');
+  g.fillStyle=grad;g.fillRect(0,0,128,128);
+  const ray=(angle,length,width,alpha)=>{g.save();g.translate(64,64);g.rotate(angle);const z=g.createLinearGradient(0,-length,0,length);z.addColorStop(0,'rgba('+rgb+',0)');z.addColorStop(.5,'rgba('+rgb+','+alpha+')');z.addColorStop(1,'rgba('+rgb+',0)');g.fillStyle=z;g.beginPath();g.moveTo(0,-length);g.lineTo(width,0);g.lineTo(0,length);g.lineTo(-width,0);g.closePath();g.fill();g.restore();};
+  ray(0,54,1.35,.85);ray(Math.PI/2,51,1.25,.8);
+  ray(Math.PI/4,30,.7,.32);ray(-Math.PI/4,30,.7,.32);
+  grad=g.createRadialGradient(64,64,0,64,64,12);grad.addColorStop(0,'#fff3ff');grad.addColorStop(.22,'#ffe7ff');grad.addColorStop(.4,'rgba('+rgb+',1)');grad.addColorStop(.65,'rgba('+rgb+',.64)');grad.addColorStop(1,'rgba('+rgb+',0)');g.fillStyle=grad;g.fillRect(52,52,24,24);
+  sprites.set(type,c);return c;
+}
+function viewport(){
+  const top=Math.min(132,H*.24),bottom=Math.min(98,H*.22),height=Math.max(70,H-top-bottom);
+  return {cx:W*.5,cy:top+height*.5,scale:Math.max(35,Math.min(W*.43/1.25,height*.47/.85)),top,bottom};
+}
+function resize(){
+  const bounds=$('scene').getBoundingClientRect(),nw=Math.max(1,bounds.width),nh=Math.max(1,bounds.height),ratio=Math.min(devicePixelRatio||1,1.75);
+  if(nw===W&&nh===H&&ratio===DPR)return;
+  W=nw;H=nh;DPR=ratio;canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);
+  // Keep world orbits, background seeds and view orientation across layout changes.
+  zoomAnchor=null;cameraTarget.zoom=camera.zoom;cameraTarget.panX=camera.panX;cameraTarget.panY=camera.panY;
+  hideTooltip();invalidate();
+}
+function visual(e){
+  const score=e.type==='fragment'?unit(e.data.vad?.arousal):e.type==='claim'?unit(e.data.conviction):null;
+  return e.type==='fragment'?{size:score===null?35:25+score*48,alpha:.9}:e.type==='thread'?{size:53,alpha:.94}:{size:score===null?65:57+score*21,alpha:1};
+}
+function worldPosition(e){
+  const o=e.orbit,a=o.phase+clock*o.speed;
+  // Each seeded orbit has its own plane, inclination and centre; no common thin disc.
+  const x=Math.cos(a)*o.radius,y=Math.sin(a)*o.radius*o.ellipse;
+  const py=y*o.ct,pz=y*o.st;
+  return {x:x*o.cn-py*o.sn,y:x*o.sn+py*o.cn+o.offsetY,z:pz+o.depth};
+}
+// A distant virtual lens keeps depth gentle and cannot approach a near-plane singularity.
+function lens(q){return 1/(1-clamp(q.z,-1.5,1.5)*.14);}
+function cameraTransform(c=camera){
+  return {cy:Math.cos(c.yaw),sy:Math.sin(c.yaw),cp:Math.cos(c.pitch),sp:Math.sin(c.pitch)};
+}
+function rotateWorld(p,r){
+  const x=p.x*r.cy+p.z*r.sy,z=-p.x*r.sy+p.z*r.cy;
+  return {x,y:p.y*r.cp-z*r.sp,z:p.y*r.sp+z*r.cp};
+}
+function project(e,transform=cameraTransform(),view=viewport()){
+  const q=rotateWorld(worldPosition(e),transform),k=view.scale*camera.zoom;
+  const v=e.visual||(e.visual=visual(e));
+  const depth=lens(q);
+  const size=v.size*depth*Math.pow(camera.zoom,.62)*(e.key===selectedKey?1.35+focusPulse*.18:e.key===hoverKey?1.16:1);
+  const x=view.cx+k*(q.x*depth+camera.panX),y=view.cy+k*(q.y*depth+camera.panY);
+  return {e,x,y,z:q.z,size,hitRadius:clamp(size*.2,9,23),visible:x>-size&&x<W+size&&y>-size&&y<H+size};
+}
+function cancelCameraTransition(){
+  focusTransition=null;zoomAnchor=null;
+  angularVelocity.yaw=0;angularVelocity.pitch=0;
+  Object.assign(cameraTarget,camera);
+}
+function zoomAt(x,y,factor){
+  cancelCameraFocus();
+  const view=viewport(),k=view.scale*camera.zoom;
+  // Zoom the already lens-projected plane, keeping the pointer anchor exact at every depth.
+  zoomAnchor={x,y,qx:(x-view.cx)/k-camera.panX,qy:(y-view.cy)/k-camera.panY};
+  cameraTarget.yaw=camera.yaw;cameraTarget.pitch=camera.pitch;
+  cameraTarget.zoom=clamp(cameraTarget.zoom*factor,CAMERA_LIMITS.minZoom,CAMERA_LIMITS.maxZoom);
+  if(paused||reduced)updateCamera(0,performance.now());
+  hideTooltip();invalidate();
+}
+function cancelCameraFocus(){focusTransition=null;angularVelocity.yaw=0;angularVelocity.pitch=0;}
+function resetCamera(){
+  cancelCameraTransition();
+  // Choose the nearest equivalent default heading, never unwind several turns.
+  Object.assign(cameraTarget,{yaw:Math.round(camera.yaw/TAU)*TAU,pitch:0,zoom:1,panX:0,panY:0});
+  if(paused||reduced)Object.assign(camera,cameraTarget);
+  hideTooltip();invalidate();
+}
+function focusEntry(key){
+  const e=entryMap.get(key);if(!e)return;
+  const p=project(e),v=viewport(),margin=Math.min(65,W*.15);
+  if(p.x>margin&&p.x<W-margin&&p.y>v.top&&p.y<H-v.bottom)return;
+  cancelCameraTransition();
+  focusTransition={key,until:performance.now()+900};
+  if(paused||reduced)updateCamera(0,performance.now());
+  invalidate();
+}
+function updateCamera(dt,now){
+  const immediate=paused||reduced;
+  if(!dragState&&!immediate){
+    cameraTarget.yaw+=angularVelocity.yaw*dt;
+    cameraTarget.pitch=clamp(cameraTarget.pitch+angularVelocity.pitch*dt,-CAMERA_LIMITS.pitch,CAMERA_LIMITS.pitch);
+    const decay=Math.exp(-12*dt);angularVelocity.yaw*=decay;angularVelocity.pitch*=decay;
+    if(Math.abs(angularVelocity.yaw)<.002)angularVelocity.yaw=0;
+    if(Math.abs(angularVelocity.pitch)<.002)angularVelocity.pitch=0;
+  }
+  if(focusTransition){
+    const e=entryMap.get(focusTransition.key);
+    if(!e||!fieldEntries.includes(e))focusTransition=null;
+    else {
+      const q=rotateWorld(worldPosition(e),cameraTransform(cameraTarget));
+      const depth=lens(q);cameraTarget.panX=-q.x*depth;cameraTarget.panY=-q.y*depth;
+      if(immediate||now>focusTransition.until)focusTransition=null;
+    }
+  }
+  const mix=immediate?1:1-Math.exp(-dt*(dragState?22:12));
+  for(const name of ['yaw','pitch','zoom'])camera[name]+=(cameraTarget[name]-camera[name])*mix;
+  if(zoomAnchor){
+    const v=viewport(),k=v.scale*camera.zoom;
+    camera.panX=(zoomAnchor.x-v.cx)/k-zoomAnchor.qx;camera.panY=(zoomAnchor.y-v.cy)/k-zoomAnchor.qy;
+    const targetK=v.scale*cameraTarget.zoom;
+    cameraTarget.panX=(zoomAnchor.x-v.cx)/targetK-zoomAnchor.qx;cameraTarget.panY=(zoomAnchor.y-v.cy)/targetK-zoomAnchor.qy;
+    if(Math.abs(camera.zoom-cameraTarget.zoom)<.0001){camera.zoom=cameraTarget.zoom;camera.panX=cameraTarget.panX;camera.panY=cameraTarget.panY;zoomAnchor=null;}
+  }else for(const name of ['panX','panY'])camera[name]+=(cameraTarget[name]-camera[name])*mix;
+  for(const name of ['yaw','pitch','panX','panY'])if(Math.abs(cameraTarget[name]-camera[name])<.00005)camera[name]=cameraTarget[name];
+  // Rebase both angles together only after many turns; interpolation stays continuous.
+  if(Math.abs(camera.yaw)>TAU*8){const turns=Math.trunc(camera.yaw/TAU)*TAU;camera.yaw-=turns;cameraTarget.yaw-=turns;}
+  const label=Math.round(camera.zoom*100)+'%';if(label!==zoomLabel){$('zoomValue').textContent=label;zoomLabel=label;}
+  return !!focusTransition||!!zoomAnchor||Math.abs(angularVelocity.yaw)+Math.abs(angularVelocity.pitch)>0||
+    Object.keys(camera).some(k=>Math.abs(camera[k]-cameraTarget[k])>.00005);
+}
+
+// Independent decoration layers: never entries, list items or hit-test targets.
+function buildBackground(){
+  const rand=random(573192);
+  const normal=()=>Math.sqrt(-2*Math.log(Math.max(.00001,rand())))*Math.cos(TAU*rand());
+  const clusters=[[-.67,.28],[.55,-.22],[2.15,.35],[-2.35,-.3],[.17,.48],[1.3,-.58],[-1.4,.65],[2.8,-.64]];
+  function star(mid=false){
+    const choice=rand();let lon,lat;
+    if(choice<.5){lon=rand()*TAU;lat=Math.asin(rand()*2-1);}
+    else if(choice<.77){lon=rand()*TAU;lat=.25*Math.sin(lon*2+.3)+normal()*.12;}
+    else {const c=clusters[Math.floor(rand()*clusters.length)];lon=c[0]+normal()*.13;lat=c[1]+normal()*.08;}
+    lat=clamp(lat,-1.48,1.48);const cos=Math.cos(lat);
+    return {x:Math.sin(lon)*cos,y:Math.sin(lat),z:Math.cos(lon)*cos,
+      size:mid?.9+rand()*.85:.32+rand()*.7,
+      alpha:mid?.38+rand()*.38:.22+rand()*.42,phase:rand()*TAU};
+  }
+  const far=Array.from({length:7200},()=>star()),mid=Array.from({length:260},()=>star(true));
+  // Soft points only: environment stars never use the memory's cross-ray sprites.
+  const dot=document.createElement('canvas');dot.width=dot.height=32;
+  const dc=dot.getContext('2d'),glow=dc.createRadialGradient(16,16,0,16,16,16);
+  glow.addColorStop(0,'rgba(222,199,251,.95)');glow.addColorStop(.13,'rgba(185,159,228,.8)');
+  glow.addColorStop(.35,'rgba(163,131,208,.18)');glow.addColorStop(1,'rgba(150,120,200,0)');
+  dc.fillStyle=glow;dc.fillRect(0,0,32,32);
+  // A seamless longitude panorama: rotating past 360 degrees cannot expose an edge.
+  const cloud=document.createElement('canvas');cloud.width=768;cloud.height=384;
+  const b=cloud.getContext('2d'),pixels=b.createImageData(768,384),grid=new Float32Array(65*65);
+  const galaxy=document.createElement('canvas');galaxy.width=768;galaxy.height=384;
+  const gg=galaxy.getContext('2d'),milky=gg.createImageData(768,384);
+  for(let i=0;i<grid.length;i++)grid[i]=rand();
+  const noise=(x,y,period)=>{
+    const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+    const at=(a,c)=>grid[((c%65+65)%65)*65+((a%period+period)%period)];
+    return (at(ix,iy)*(1-u)+at(ix+1,iy)*u)*(1-v)+(at(ix,iy+1)*(1-u)+at(ix+1,iy+1)*u)*v;
+  };
+  const periodicDistance=(a,c)=>{const d=Math.abs(a-c);return Math.min(d,1-d);};
+  for(let y=0;y<384;y++)for(let x=0;x<768;x++){
+    const nx=x/768,ny=y/384;
+    const n=noise(nx*6,ny*5,6)*.5+noise(nx*16,ny*12,16)*.3+noise(nx*40,ny*31,40)*.2;
+    const ridge=.43+.07*Math.sin(nx*TAU*2)+.025*(n-.5);
+    const dx=periodicDistance(nx,.52),dx2=periodicDistance(nx,.38),dx3=periodicDistance(nx,.91);
+    const knots=Math.exp(-(dx*dx/.004+(ny-ridge)**2/.0055))+
+      Math.exp(-(dx2*dx2/.0018+(ny-.67)**2/.009))*.65+
+      Math.exp(-(dx3*dx3/.0025+(ny-.38)**2/.007))*.75;
+    const filament=ridge+.035*Math.sin(nx*TAU*7+n*3);
+    const band=Math.exp(-(dx*dx/.055+(ny-filament)**2/.0028))*.42+
+      Math.exp(-(dx3*dx3/.025+(ny-(.63+.1*Math.sin(nx*TAU*3)))**2/.0018))*.24;
+    const dust=noise(nx*64,ny*48,64);
+    const density=clamp((n-.19)*1.8,0,1)*(knots+band)*( .68+dust*.5);
+    const i=(y*768+x)*4;
+    pixels.data[i]=86+n*38;pixels.data[i+1]=48+n*24;pixels.data[i+2]=144+n*35;
+    pixels.data[i+3]=Math.round(Math.min(.48,density*.87)*255);
+    // Broad, warped arm with broken dust lanes, cached once rather than regenerated per frame.
+    const arm=.5+.14*Math.sin(nx*TAU+.6)+.035*Math.sin(nx*TAU*3+n*2);
+    const envelope=Math.exp(-(((ny-arm)/.115)**2));
+    const lane=Math.exp(-(((ny-arm-.018*Math.sin(nx*TAU*5))/.016)**2));
+    const texture=clamp((n-.2)*1.65,0,1)*(.6+dust*.5);
+    const haze=envelope*texture*(1-lane*.62)*(.67+.33*Math.sin(nx*TAU*2+1)**2);
+    milky.data[i]=112+n*35;milky.data[i+1]=91+n*30;milky.data[i+2]=167+n*35;
+    milky.data[i+3]=Math.round(Math.min(.26,haze*.36)*255);
+  }
+  b.putImageData(pixels,0,0);
+  gg.putImageData(milky,0,0);
+  return {far,mid,cloud,dot,galaxy};
+}
+function drawBackground(){
+  if(!backgroundLayers)backgroundLayers=buildBackground();
+  ctx.fillStyle='#080610';ctx.fillRect(0,0,W,H);
+  const view=viewport(),c=camera,cloud=backgroundLayers.cloud;
+  const drift=!paused&&!reduced?Math.sin(clock*.02)*3:0;
+  const cloudWidth=W*3*(1+(c.zoom-1)*.035),cloudHeight=H*1.28;
+  const offset=c.panX*view.scale*.025+drift;
+  const heading=((c.yaw/TAU)%1+1)%1;
+  let left=(W-cloudWidth)/2-heading*cloudWidth+offset;
+  while(left>0)left-=cloudWidth;while(left+cloudWidth<0)left+=cloudWidth;
+  const top=(H-cloudHeight)/2+c.panY*view.scale*.025-c.pitch*H*.14;
+  ctx.globalAlpha=reveal(1,2.5)*(backgroundQuality<.6?.8:1);
+  for(let x=left;x<W;x+=cloudWidth)ctx.drawImage(cloud,x,top,cloudWidth,cloudHeight);
+  const galaxyWidth=W*2.4*(1+(c.zoom-1)*.018);
+  let galaxyLeft=(W-galaxyWidth)/2-heading*galaxyWidth+c.panX*view.scale*.012;
+  while(galaxyLeft>0)galaxyLeft-=galaxyWidth;while(galaxyLeft+galaxyWidth<0)galaxyLeft+=galaxyWidth;
+  ctx.globalAlpha=reveal(1,2.5)*(.85+.15*reveal(1,2.5));
+  for(let x=galaxyLeft;x<W;x+=galaxyWidth)ctx.drawImage(backgroundLayers.galaxy,x,-H*.15-c.pitch*H*.08,galaxyWidth,H*1.3);
+  const rotation=cameraTransform();
+  const paint=(stars,factor,limit,soft)=>{
+    const kz=1+(c.zoom-1)*factor;
+    const ox=c.panX*view.scale*factor,oy=c.panY*view.scale*factor;
+    ctx.fillStyle=soft?'#c8abe8':'#bba4da';
+    for(let i=0;i<limit;i++){
+      const s=stars[i],q=rotateWorld(s,rotation);
+      if(q.z<=.03)continue;
+      const x=W*.5+q.x*W*(soft?.77:.84)*kz+ox,y=H*.5+q.y*H*(soft?.85:.95)*kz+oy;
+      if(x<-12||x>W+12||y<-12||y>H+12)continue;
+      const horizon=clamp((q.z-.03)/.16,0,1);
+      ctx.globalAlpha=s.alpha*horizon*reveal(soft?1:.1,soft?2.5:1.4)*(soft&&!paused&&!reduced?.92+.08*Math.sin(clock*.15+s.phase):1);
+      const size=s.size*Math.min(kz,1.3);
+      if(soft){const radius=size*6;ctx.drawImage(backgroundLayers.dot,x-radius/2,y-radius/2,radius,radius);}
+      else ctx.fillRect(x,y,size,size);
+    }
+  };
+  const farCount=Math.round(Math.min(7200,Math.max(3600,W*H/150))*backgroundQuality);
+  paint(backgroundLayers.far,.065,farCount,false);
+  paint(backgroundLayers.mid,.21,Math.round(260*backgroundQuality),true);
+  ctx.globalAlpha=1;
+}
+function drawFrame(now){
+  raf=0;if(document.hidden)return;
+  if(openingActive){
+    openingTime=Math.min(4,(now-openingStart)/1000);
+    if(reduced||paused||openingTime>=4){finishOpening();if(!reduced&&!paused&&selectedKey)focusPulse=.45;}
+    else brand.style.opacity=String(reveal(2.5,4));
+  }
+  const moving=!paused&&!reduced;
+  if(frameStep&&now-paintedAt<frameStep&&!dirty){raf=requestAnimationFrame(drawFrame);return;}
+  const dt=lastFrame?Math.min((now-lastFrame)/1000,.05):1/60;lastFrame=now;
+  const started=performance.now();paintedAt=now;
+  if(moving)clock+=dt;
+  const cameraMoving=updateCamera(dt,now);
+  drawBackground();
+  const transform=cameraTransform(),view=viewport();
+  projected=fieldEntries.map(e=>project(e,transform,view));
+  // Back-to-front drawing and the same final screen-space coordinates for hit testing.
+  projected.sort((a,b)=>a.z-b.z);
+  const selected=entryMap.get(selectedKey),selectedPoint=projected.find(p=>p.e.key===selectedKey);
+  if(selected&&selectedPoint){
+    const ids=selected.type==='thread'?array(selected.data.history).map(h=>'fragment:'+h.fragmentId):selected.type==='claim'?array(selected.data.evidenceIds).map(id=>'fragment:'+id):array(selected.data.threadIds).map(id=>'thread:'+id);
+    ctx.globalAlpha=reveal(2.5,4);ctx.strokeStyle='rgba(186,140,228,.19)';ctx.lineWidth=.7;const related=new Set(ids.slice(0,24));
+    ctx.beginPath();for(const q of projected)if(related.has(q.e.key)){ctx.moveTo(selectedPoint.x,selectedPoint.y);ctx.lineTo(q.x,q.y);}ctx.stroke();
+  }
+  for(const p of projected){
+    if(!p.visible)continue;
+    const e=p.e,v=e.visual,twinkle=moving?.9+.1*Math.sin(clock*e.orbit.frequency+e.orbit.twinkle):1;
+    const arrival=2.5+(1-clamp((v.size-25)/60,0,1))*.45+(hash(e.key)%101)/101*.25;
+    ctx.globalAlpha=clamp(v.alpha*twinkle*(.9+p.z*.08),.35,1)*reveal(arrival,Math.min(4,arrival+.8));
+    // Keep every memory's ray sprite. Budget reductions affect decoration first.
+    ctx.drawImage(sprite(e.type),p.x-p.size/2,p.y-p.size/2,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+  if(selectedPoint?.visible){ctx.globalAlpha=reveal(3.5,4);ctx.strokeStyle='rgba(229,182,246,.44)';ctx.lineWidth=.7;ctx.beginPath();ctx.arc(selectedPoint.x,selectedPoint.y,selectedPoint.size*.34+focusPulse*9,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}
+  if(focusPulse>0)focusPulse=Math.max(0,focusPulse-dt*1.25);
+  const hit=pointer.inside&&!dragState?.dragging?hitTest(pointer.x,pointer.y):null;
+  if(hit?.e.key!==hoverKey){hoverKey=hit?.e.key||null;if(hit)showTooltip(hit.e);else hideTooltip();}
+  canvas.style.cursor=dragState?.dragging?'grabbing':hit?'pointer':'grab';
+  if(hit)positionTooltip();
+  dirty=false;
+  if(performance.now()-started>22){
+    slowFrames++;if(slowFrames>35){if(backgroundQuality>.4)backgroundQuality=.4;else frameStep=1000/30;slowFrames=0;}
+  }else slowFrames=Math.max(0,slowFrames-1);
+  if(moving||cameraMoving||focusPulse>0||openingActive)raf=requestAnimationFrame(drawFrame);
+}
+function invalidate(){dirty=true;if(!raf&&!document.hidden)raf=requestAnimationFrame(drawFrame);}
+function hitTest(x,y){
+  let found=null,best=Infinity;
+  for(let i=projected.length-1;i>=0;i--){
+    const p=projected[i];if(!p.visible||p.x<0||p.x>W||p.y<0||p.y>H)continue;
+    const d=(p.x-x)**2+(p.y-y)**2;
+    if(d<p.hitRadius*p.hitRadius&&d<best-1){found=p;best=d;}
+  }
+  return found;
+}
+function showTooltip(e){$('tipType').textContent=e.meta.label;$('tipTitle').textContent=e.title.slice(0,65);$('tipBody').textContent=e.body.slice(0,100)+(e.body.length>100?'…':'');$('tooltip').hidden=false;}
+function positionTooltip(){const tip=$('tooltip');const x=Math.max(8,Math.min(W-tip.offsetWidth-8,pointer.x+19)),y=Math.max(8,Math.min(H-tip.offsetHeight-8,pointer.y+19));tip.style.left=x+'px';tip.style.top=y+'px';}
+function hideTooltip(){$('tooltip').hidden=true;hoverKey=null;canvas.style.cursor=dragState?.dragging?'grabbing':'grab';}
+function setPointer(event){const r=canvas.getBoundingClientRect();pointer.x=event.clientX-r.left;pointer.y=event.clientY-r.top;pointer.inside=pointer.x>=0&&pointer.x<=W&&pointer.y>=0&&pointer.y<=H;}
+canvas.addEventListener('wheel',event=>{
+  if(event.ctrlKey)return; // Preserve browser accessibility/pinch zoom.
+  event.preventDefault();if(dragState)return;
+  setPointer(event);
+  const delta=clamp(event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?H:1),-160,160);
+  zoomAt(pointer.x,pointer.y,Math.exp(-delta*.0017));
+},{passive:false});
+canvas.addEventListener('pointerdown',event=>{
+  if(event.button!==0||!event.isPrimary)return;
+  setPointer(event);cancelCameraTransition();suppressClick=false;
+  dragState={id:event.pointerId,startX:pointer.x,startY:pointer.y,lastX:pointer.x,lastY:pointer.y,time:performance.now(),dragging:false,vYaw:0,vPitch:0};
+  canvas.setPointerCapture(event.pointerId);invalidate();
 });
-
-function checkHover() {
-  hoveredStar = null;
-
-  // 检查认知亮星（优先，因为大）
-  for (let i = claimStars.length - 1; i >= 0; i--) {
-    const s = claimStars[i];
-    const dx = mouseX - s.x;
-    const dy = mouseY - s.y;
-    if (dx * dx + dy * dy < 225) {
-      hoveredStar = s;
-      canvas.style.cursor = 'pointer';
-      return;
+canvas.addEventListener('pointermove',event=>{
+  setPointer(event);
+  if(dragState&&dragState.id===event.pointerId){
+    const d=dragState,now=performance.now(),elapsed=Math.max(.008,(now-d.time)/1000);
+    if(Math.hypot(pointer.x-d.startX,pointer.y-d.startY)>6)d.dragging=true;
+    if(d.dragging){
+      const dx=pointer.x-d.lastX,dy=pointer.y-d.lastY;
+      const yawDelta=dx*.004,pitchDelta=dy*.0024;
+      cameraTarget.yaw+=yawDelta;
+      cameraTarget.pitch=clamp(cameraTarget.pitch+pitchDelta,-CAMERA_LIMITS.pitch,CAMERA_LIMITS.pitch);
+      d.vYaw=clamp(yawDelta/elapsed,-.28,.28);d.vPitch=clamp(pitchDelta/elapsed,-.16,.16);
+      hideTooltip();
+      if(paused||reduced)updateCamera(0,now);
     }
+    d.lastX=pointer.x;d.lastY=pointer.y;d.time=now;
   }
-
-  // 检查线索星
-  for (let i = threadStars.length - 1; i >= 0; i--) {
-    const s = threadStars[i];
-    const dx = mouseX - s.x;
-    const dy = mouseY - s.y;
-    if (dx * dx + dy * dy < 100) {
-      hoveredStar = s;
-      canvas.style.cursor = 'pointer';
-      return;
-    }
-  }
-
-  // 检查碎片星
-  for (let i = stars.length - 1; i >= 0; i--) {
-    const s = stars[i];
-    const dx = mouseX - s.x;
-    const dy = mouseY - s.y;
-    if (dx * dx + dy * dy < 36) {
-      hoveredStar = s;
-      canvas.style.cursor = 'pointer';
-      return;
-    }
-  }
-
-  canvas.style.cursor = 'default';
-}
-
-canvas.addEventListener('click', () => {
-  if (hoveredStar) {
-    showPanel(hoveredStar);
-  }
+  invalidate();
 });
-
-function drawStar(x, y, size, brightness, color) {
-  ctx.beginPath();
-  ctx.arc(x, y, size, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.globalAlpha = brightness;
-  ctx.fill();
-
-  // 光晕
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
-  gradient.addColorStop(0, color.replace(')', `, ${brightness * 0.3})`).replace('rgb', 'rgba'));
-  gradient.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.beginPath();
-  ctx.arc(x, y, size * 4, 0, Math.PI * 2);
-  ctx.fillStyle = gradient;
-  ctx.globalAlpha = brightness * 0.5;
-  ctx.fill();
-
-  ctx.globalAlpha = 1;
-}
-
-function render() {
-  // 背景渐变
-  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H) * 0.7);
-  bg.addColorStop(0, '#121228');
-  bg.addColorStop(0.5, '#0a0a1a');
-  bg.addColorStop(1, '#050510');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // 星云
-  drawNebula();
-
-  const time = Date.now() / 1000;
-
-  // 碎片星
-  stars.forEach(s => {
-    const twinkle = 0.7 + 0.3 * Math.sin(time * s.twinkleSpeed * 10 + s.twinkle);
-    const brightness = s.brightness * twinkle;
-    drawStar(s.x, s.y, s.baseSize, brightness, 'rgb(180, 180, 220)');
-  });
-
-  // 线索星座连线
-  threadStars.forEach(t => {
-    const twinkle = 0.7 + 0.3 * Math.sin(time * t.twinkleSpeed * 10 + t.twinkle);
-
-    // 连线
-    if (t.memberStars.length > 0) {
-      ctx.strokeStyle = `rgba(122, 197, 160, ${0.15 * twinkle})`;
-      ctx.lineWidth = 0.8;
-      t.memberStars.forEach(m => {
-        ctx.beginPath();
-        ctx.moveTo(t.x, t.y);
-        ctx.lineTo(m.x, m.y);
-        ctx.stroke();
-      });
-
-      // 成员星之间连一下 形成星座形状
-      for (let i = 0; i < t.memberStars.length; i++) {
-        const next = (i + 1) % t.memberStars.length;
-        ctx.beginPath();
-        ctx.moveTo(t.memberStars[i].x, t.memberStars[i].y);
-        ctx.lineTo(t.memberStars[next].x, t.memberStars[next].y);
-        ctx.stroke();
-      }
-
-      // 成员小星星
-      t.memberStars.forEach(m => {
-        drawStar(m.x, m.y, 0.8, 0.3 * twinkle, 'rgb(150, 200, 170)');
-      });
-    }
-
-    // 核心星
-    drawStar(t.x, t.y, t.baseSize, t.brightness * twinkle, 'rgb(122, 197, 160)');
-  });
-
-  // 认知亮星
-  claimStars.forEach(c => {
-    const twinkle = 0.8 + 0.2 * Math.sin(time * c.twinkleSpeed * 10 + c.twinkle);
-    drawStar(c.x, c.y, c.baseSize, c.brightness * twinkle, 'rgb(240, 216, 144)');
-  });
-
-  // hover 高亮
-  if (hoveredStar) {
-    ctx.beginPath();
-    ctx.arc(hoveredStar.x, hoveredStar.y, hoveredStar.baseSize * 3, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 197, 160, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+function endDrag(event,cancelled=false){
+  if(!dragState||dragState.id!==event.pointerId)return;
+  const d=dragState;dragState=null;
+  if(d.dragging||cancelled){
+    suppressClick=true;lastDragAt=performance.now();
+    if(!cancelled&&!paused&&!reduced&&performance.now()-d.time<100){angularVelocity.yaw=d.vYaw;angularVelocity.pitch=d.vPitch;}
   }
-
-  requestAnimationFrame(render);
+  if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);
+  if(event.pointerType==='touch'){pointer.inside=false;hideTooltip();}
+  invalidate();
 }
+canvas.addEventListener('pointerup',e=>endDrag(e));
+canvas.addEventListener('pointercancel',e=>endDrag(e,true));
+canvas.addEventListener('lostpointercapture',e=>endDrag(e,true));
+canvas.addEventListener('pointerleave',()=>{pointer.inside=false;hideTooltip();invalidate();});
+canvas.addEventListener('click',event=>{
+  if(suppressClick){suppressClick=false;return;}
+  setPointer(event);const p=hitTest(pointer.x,pointer.y);
+  if(p)selectEntry(p.e.key,'star');else closeSelection();
+  if(event.pointerType==='touch'){pointer.inside=false;hideTooltip();}
+});
+canvas.addEventListener('dblclick',event=>{
+  setPointer(event);
+  if(performance.now()-lastDragAt>350&&!hitTest(pointer.x,pointer.y))resetCamera();
+});
+canvas.addEventListener('keydown',event=>{
+  if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-','Home'].includes(event.key))return;
+  event.preventDefault();
+  if(event.key==='Home'){resetCamera();return;}
+  if(['+','=','-'].includes(event.key)){const v=viewport();zoomAt(v.cx,v.cy,event.key==='-'?.87:1.15);return;}
+  cancelCameraTransition();
+  cameraTarget.yaw=camera.yaw+(event.key==='ArrowLeft'?-.1:event.key==='ArrowRight'?.1:0);
+  cameraTarget.pitch=clamp(camera.pitch+(event.key==='ArrowUp'?-.07:event.key==='ArrowDown'?.07:0),-CAMERA_LIMITS.pitch,CAMERA_LIMITS.pitch);
+  if(paused||reduced)updateCamera(0,performance.now());invalidate();
+});
+$('resetView').addEventListener('click',resetCamera);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){cancelAnimationFrame(raf);raf=0;angularVelocity.yaw=angularVelocity.pitch=0;focusTransition=null;if(dragState)endDrag({pointerId:dragState.id},true);}
+  else{lastFrame=0;invalidate();}
+});
+function motionLabel(){$('motionButton').textContent=reduced?'系统已减少动态':paused?'继续动态':'暂停动态';$('motionButton').disabled=reduced;$('motionButton').setAttribute('aria-pressed',String(paused||reduced));}
+function stopAmbient(){focusPulse=0;cancelCameraTransition();}
+media.addEventListener('change',()=>{reduced=media.matches;if(reduced)stopAmbient();lastFrame=0;motionLabel();invalidate();});
+$('motionButton').addEventListener('click',()=>{paused=!paused;if(paused)stopAmbient();lastFrame=0;motionLabel();invalidate();});
+new ResizeObserver(resize).observe($('scene'));
+window.addEventListener('resize',resize);
 
-// 绘制星云
-function drawNebula() {
-  const time = Date.now() / 50000;
-  const cx = W / 2 + Math.sin(time) * 50;
-  const cy = H / 2 + Math.cos(time * 0.7) * 30;
-
-  const neb = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.5);
-  neb.addColorStop(0, 'rgba(80, 60, 120, 0.08)');
-  neb.addColorStop(0.3, 'rgba(60, 80, 120, 0.05)');
-  neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = neb;
-  ctx.fillRect(0, 0, W, H);
-
-  // 第二团星云
-  const cx2 = W * 0.3 + Math.cos(time * 1.3) * 40;
-  const cy2 = H * 0.7 + Math.sin(time * 0.9) * 35;
-  const neb2 = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, 200);
-  neb2.addColorStop(0, 'rgba(100, 80, 140, 0.06)');
-  neb2.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = neb2;
-  ctx.fillRect(0, 0, W, H);
-}
-
-// ===== 信息面板 =====
-function showPanel(star) {
-  const panel = document.getElementById('infoPanel');
-  const kicker = document.getElementById('infoKicker');
-  const title = document.getElementById('infoTitle');
-  const date = document.getElementById('infoDate');
-  const body = document.getElementById('infoBody');
-  const tags = document.getElementById('infoTags');
-  const threadsEl = document.getElementById('infoThreads');
-  const conviction = document.getElementById('infoConviction');
-  const convictionFill = document.getElementById('convictionFill');
-
-  if (star.type === 'fragment') {
-    kicker.textContent = 'FRAGMENT · 记忆碎片';
-    title.textContent = star.data.title || '无题';
-    date.textContent = star.data.dateLabel || '';
-    body.textContent = star.data.body || '';
-    tags.innerHTML = (star.data.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
-    threadsEl.textContent = star.data.threadIds && star.data.threadIds.length
-      ? `关联线索：${star.data.threadIds.join('、')}`
-      : '';
-    conviction.style.display = 'none';
-  } else if (star.type === 'thread') {
-    kicker.textContent = 'THREAD · 线索星座';
-    title.textContent = star.data.label || star.data.id;
-    date.textContent = star.data.openQuestion || '';
-    body.textContent = `状态：${star.data.status || '未知'}\n碎片数量：${star.data.history ? star.data.history.length : 0}\n脉络深度：${star.data.dragonVein || 0}`;
-    tags.innerHTML = '';
-    threadsEl.textContent = '';
-    conviction.style.display = 'none';
-  } else if (star.type === 'claim') {
-    kicker.textContent = 'CLAIM · 认知亮星';
-    title.textContent = star.data.text || star.data.id;
-    date.textContent = `边界：${star.data.boundary || '未知'}`;
-
-    // 版本历史
-    let versionsText = '';
-    if (star.data.versions && star.data.versions.length > 0) {
-      const latest = star.data.versions[star.data.versions.length - 1];
-      versionsText = `\n\n最新更新：${latest.at}\n变化原因：${latest.reason || '—'}`;
-    }
-    body.textContent = (star.data.text || '') + versionsText;
-
-    tags.innerHTML = '';
-    threadsEl.textContent = '';
-    conviction.style.display = 'block';
-    convictionFill.style.width = (star.data.conviction * 100).toFixed(0) + '%';
-  }
-
-  panel.classList.add('show');
-}
-
-function closePanel() {
-  document.getElementById('infoPanel').classList.remove('show');
-}
-
-// ===== 初始化 =====
-// 读取 localStorage
-const savedUserId = localStorage.getItem('twig_user_id');
-const savedToken = localStorage.getItem('twig_auth_token');
-if (savedUserId) document.getElementById('userIdInput').value = savedUserId;
-if (savedToken) document.getElementById('tokenInput').value = savedToken;
-
-loadData();
-render();
+// 4. Accessible DOM controls, rendering state is local to this page.
+document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter;pageIndex=0;applyView();$('memoryList').scrollTop=0;}));
+$('sortSelect').addEventListener('change',e=>{sort=e.target.value;pageIndex=0;applyView();$('memoryList').scrollTop=0;});
+$('prevPage').addEventListener('click',()=>{pageIndex--;renderList();$('memoryList').scrollTop=0;});
+$('nextPage').addEventListener('click',()=>{pageIndex++;renderList();$('memoryList').scrollTop=0;});
+$('panelToggle').addEventListener('click',()=>setPanel(document.body.classList.contains('panel-closed')));
+$('closeDetail').addEventListener('click',()=>{closeSelection();renderList();});
+$('connectionButton').addEventListener('click',()=>{setPanel(true);$('connectionPanel').open=true;$('userIdInput').focus();});
+$('connectionForm').addEventListener('submit',e=>{e.preventDefault();loadData();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSelection();$('connectionPanel').open=false;hideTooltip();renderList();}});
+$('userIdInput').value=recall('twig_user_id')||'muqiu';$('tokenInput').value=recall('twig_auth_token')||'';
+resize();motionLabel();loadData();invalidate();
 </script>
 </body>
 </html>
