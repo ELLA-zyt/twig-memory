@@ -123,11 +123,11 @@
 <body>
 <main id="scene" aria-label="记忆星空">
   <canvas id="sky" tabindex="0" aria-label="动态记忆星图，可拖动旋转、滚轮缩放、双击空白复位，也可通过右侧记忆列表选择相同内容"></canvas>
-  <header class="brand"><h1>记忆星空</h1><p>MEMORY · STARMAP</p><div class="edition">每一颗星，都是记得的瞬间</div></header>
+  <header class="brand"><h1>记忆星空</h1><p>MEMORY · STARMAP</p><div class="edition">每一颗星，都是记得的瞬间</div><div class="edition" id="demoBadge">DEMO MODE</div></header>
   <div class="scene-message" id="sceneMessage" role="status">正在连接你的记忆星空…</div>
   <div class="scene-footer">
     <div><div class="count"><b id="visibleCount">0</b><span id="countLabel">颗记忆星辰</span></div><div class="breakdown"><span id="countFragments">0 碎片</span><span id="countThreads">0 线索</span><span id="countClaims">0 认知</span></div></div>
-    <div class="scene-tools"><button class="quiet-button" id="resetView" type="button" title="恢复默认视角（画布获得焦点时也可按 Home）">复位 · <span id="zoomValue">100%</span></button><button class="quiet-button" id="motionButton" type="button" aria-pressed="false">暂停动态</button><button class="quiet-button" id="connectionButton" type="button">连接设置</button></div>
+    <div class="scene-tools"><button class="quiet-button" id="resetView" type="button" title="恢复默认视角（画布获得焦点时也可按 Home）">复位 · <span id="zoomValue">100%</span></button><button class="quiet-button" id="motionButton" type="button" aria-pressed="false">暂停动态</button><button class="quiet-button" id="connectionButton" type="button">进入我的记忆</button></div>
   </div>
   <div id="tooltip" hidden role="tooltip"><span class="tip-type" id="tipType"></span><strong id="tipTitle"></strong><p id="tipBody"></p></div>
 </main>
@@ -152,12 +152,12 @@
     <h3 id="detailTitle"></h3><div id="detailDate"></div><div id="detailBody"></div><div class="tags" id="detailTags"></div><div id="detailExtra"></div><progress id="detailMeter" max="1" hidden aria-label="认知置信度"></progress>
   </section>
   <details class="connection" id="connectionPanel">
-    <summary><span>连接与访问<span id="connectionStatus">未连接</span></span></summary>
+    <summary><span>进入我的记忆<span id="connectionStatus"></span></span></summary>
     <form id="connectionForm">
-      <label>用户 ID<input id="userIdInput" type="text" value="muqiu" placeholder="muqiu" autocomplete="off" /></label>
-      <label>访问令牌<input id="tokenInput" type="password" placeholder="auth token（可选）" autocomplete="off" /></label>
-      <p>令牌沿用浏览器本地保存，仅发送给当前站点的 API 代理。</p>
-      <button class="quiet-button" id="refreshButton" type="submit">连接 / 刷新记忆</button>
+      <label>用户 ID<input id="userIdInput" type="text" placeholder="输入你的用户 ID" required autocomplete="off" /></label>
+      <label>访问令牌<input id="tokenInput" type="password" placeholder="输入访问令牌" required autocomplete="off" /></label>
+      <p>凭据仅保留在当前页面，刷新或退出后清除。</p>
+      <button class="quiet-button" id="refreshButton" type="submit">进入我的记忆</button>
     </form>
     <p id="errorMessage" hidden role="alert"></p>
   </details>
@@ -165,53 +165,72 @@
 <div class="sr-only" id="selectionAnnouncement" aria-live="polite"></div>
 <script>
 'use strict';
-// 1. Existing API contract: same-origin /v1/state + userId + optional Bearer token.
-const API_BASE = '';
-let userId = 'muqiu', authToken = '';
-let fragments = [], threads = [], claims = [];
-function fetchJson(url, opts) {
-  const headers = { 'Content-Type': 'application/json', ...(opts?.headers || {}) };
-  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-  return fetch(url, { ...opts, headers }).then(r => {
-    if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-    return r.json();
-  });
-}
-function getApiBase() { return API_BASE; }
+// 1. Demo is local. Credentials are never persisted or automatically restored.
 const $ = id => document.getElementById(id);
-function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
-function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
-let requestVersion = 0, requestController, loaded = false, loading = false;
-async function loadData() {
-  const version = ++requestVersion;
-  requestController?.abort(); requestController = new AbortController();
-  const nextUser = $('userIdInput').value.trim() || 'muqiu';
-  const changedUser = nextUser !== userId;
-  userId = nextUser; authToken = $('tokenInput').value || '';
-  remember('twig_user_id', userId); remember('twig_auth_token', authToken);
-  $('userIdInput').value = userId;
-  loading = true;
-  $('refreshButton').disabled = true; $('refreshButton').textContent = '正在连接…';
-  $('connectionStatus').textContent = '连接中'; $('errorMessage').hidden = true;
-  if (changedUser) { fragments=[]; threads=[]; claims=[]; loaded=false; closeSelection(); buildEntries(); applyView(); }
-  updateMessage();
-  try {
-    const data = await fetchJson(getApiBase() + '/v1/state?userId=' + encodeURIComponent(userId), { signal:requestController.signal });
-    if (version !== requestVersion) return;
-    if (!data || !['fragments','threads','claims'].every(k => Array.isArray(data[k]))) throw new Error('记忆数据格式不正确');
-    fragments=data.fragments; threads=data.threads; claims=data.claims; loaded=true;
-    buildEntries(); applyView();
-    if (selectedKey && entryMap.has(selectedKey)) showDetail(entryMap.get(selectedKey));
-    $('connectionStatus').textContent = '已连接';
-  } catch (error) {
-    if (version !== requestVersion || error.name === 'AbortError') return;
-    $('connectionStatus').textContent = loaded ? '刷新失败 · 显示上次数据' : '连接失败';
-    $('errorMessage').textContent = '加载失败：' + error.message + '。请检查用户 ID、令牌或服务连接。';
-    $('errorMessage').hidden = false; $('connectionPanel').open = true;
-  } finally {
-    if (version === requestVersion) {
-      loading=false; $('refreshButton').disabled=false; $('refreshButton').textContent='连接 / 刷新记忆';
-      updateMessage(); invalidate();
+let mode='demo',userId='',authToken='';
+let fragments=[],threads=[],claims=[];
+let requestVersion=0,requestController=null,loaded=false,loading=false;
+const DEMO_DATA=(()=>{
+  const themes=['雨后散步','窗边阅读','第一次烘焙','山间观察','学习画画','整理旧物'];
+  const fragments=Array.from({length:36},(_,i)=>({id:'demo-f'+i,
+    title:'示例 · '+themes[i%6]+' '+(Math.floor(i/6)+1),
+    body:'这是一条完全虚构的示例记忆：'+themes[i%6]+'时，留意到了平常容易忽略的小细节。把这个安静的瞬间写下来，作为探索星空的演示内容。',
+    dateLabel:'2025-06-'+String(1+i%28).padStart(2,'0'),tags:['虚构示例',themes[i%6]],
+    vad:{valence:.4+i%5*.1,arousal:.15+i%9*.09,dominance:.5},threadIds:['demo-t'+i%6]}));
+  const threads=themes.map((name,i)=>({id:'demo-t'+i,label:'示例线索 · '+name,
+    openQuestion:'如何在日常练习中发现新的感受？（虚构示例）',status:'active',dragonVein:1,
+    history:fragments.filter((_,j)=>j%6===i).map(f=>({fragmentId:f.id}))}));
+  const claims=themes.map((name,i)=>({id:'demo-c'+i,docTitle:'示例认知 · '+name,
+    text:'持续留意微小变化，可以帮助我们理解自己的体验。这是虚构的认知示例。',
+    conviction:.45+i*.08,boundary:'仅用于演示，不代表真实个人经历',evidenceIds:['demo-f'+i,'demo-f'+(i+6)],
+    versions:[{at:'2025-06-'+String(20+i),reason:'整合虚构示例片段'}]}));
+  return {fragments,threads,claims};
+})();
+function clearMemoryView(){
+  closeSelection();hideTooltip();cancelCameraTransition();focusPulse=0;
+  fragments=[];threads=[];claims=[];entries=[];entryMap.clear();filtered=[];fieldEntries=[];projected=[];
+  for(const id of ['detailTitle','detailDate','detailBody','detailExtra','detailType','detailTags','tipType','tipTitle','tipBody','selectionAnnouncement'])$(id).replaceChildren();
+  $('detailMeter').value=0;$('detailMeter').hidden=true;$('memoryList').replaceChildren();pageIndex=0;
+  // Erase the previous frame immediately, including when entering the back/forward cache.
+  ctx.fillStyle='#080610';ctx.fillRect(0,0,W,H);
+}
+function installData(data){
+  clearMemoryView();fragments=data.fragments;threads=data.threads;claims=data.claims;loaded=true;
+  buildEntries();applyView();
+}
+function enterDemo(){
+  ++requestVersion;requestController?.abort();requestController=null;
+  mode='demo';userId='';authToken='';loading=false;
+  $('userIdInput').value='';$('tokenInput').value='';
+  $('errorMessage').textContent='';$('errorMessage').hidden=true;
+  $('connectionStatus').textContent='';$('connectionPanel').hidden=false;$('connectionPanel').open=false;
+  $('refreshButton').disabled=false;$('refreshButton').textContent='进入我的记忆';
+  $('connectionButton').textContent='进入我的记忆';$('demoBadge').hidden=false;
+  installData(structuredClone(DEMO_DATA));
+}
+async function loadData(){
+  if(mode!=='demo')return;
+  const candidateUser=$('userIdInput').value.trim(),candidateToken=$('tokenInput').value.trim();
+  if(!candidateUser||!candidateToken)return;
+  const version=++requestVersion;requestController?.abort();requestController=new AbortController();
+  loading=true;$('refreshButton').disabled=true;$('connectionStatus').textContent='正在验证…';$('errorMessage').hidden=true;
+  try{
+    const response=await fetch('/v1/state?userId='+encodeURIComponent(candidateUser),{
+      headers:{Authorization:'Bearer '+candidateToken},signal:requestController.signal,cache:'no-store',redirect:'error'});
+    if(!response.ok)throw new Error('access');
+    const data=await response.json();
+    if(version!==requestVersion)return;
+    if(!data||!['fragments','threads','claims'].every(k=>Array.isArray(data[k])&&data[k].every(x=>x&&typeof x==='object'&&x.id!=null)))throw new Error('format');
+    userId=candidateUser;authToken=candidateToken;mode='private';installData(data);
+    $('demoBadge').hidden=true;$('connectionPanel').open=false;$('connectionPanel').hidden=true;
+    $('connectionButton').textContent='退出 / 返回演示';$('userIdInput').value='';$('errorMessage').textContent='';
+  }catch(error){
+    if(version!==requestVersion||error.name==='AbortError')return;
+    $('errorMessage').textContent='暂时无法访问，请检查用户 ID、令牌或服务连接。';$('errorMessage').hidden=false;
+  }finally{
+    if(version===requestVersion){
+      $('tokenInput').value='';$('connectionStatus').textContent='';loading=false;requestController=null;
+      $('refreshButton').disabled=false;updateMessage();invalidate();
     }
   }
 }
@@ -746,11 +765,14 @@ $('prevPage').addEventListener('click',()=>{pageIndex--;renderList();$('memoryLi
 $('nextPage').addEventListener('click',()=>{pageIndex++;renderList();$('memoryList').scrollTop=0;});
 $('panelToggle').addEventListener('click',()=>setPanel(document.body.classList.contains('panel-closed')));
 $('closeDetail').addEventListener('click',()=>{closeSelection();renderList();});
-$('connectionButton').addEventListener('click',()=>{setPanel(true);$('connectionPanel').open=true;$('userIdInput').focus();});
+$('connectionButton').addEventListener('click',()=>{if(mode==='private'){enterDemo();return;}setPanel(true);$('connectionPanel').open=true;$('userIdInput').focus();});
 $('connectionForm').addEventListener('submit',e=>{e.preventDefault();loadData();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSelection();$('connectionPanel').open=false;hideTooltip();renderList();}});
-$('userIdInput').value=recall('twig_user_id')||'muqiu';$('tokenInput').value=recall('twig_auth_token')||'';
-resize();motionLabel();loadData();invalidate();
+// Remove only legacy credentials belonging to this application.
+try{localStorage.removeItem('twig_user_id');localStorage.removeItem('twig_auth_token');}catch{}
+window.addEventListener('pagehide',()=>enterDemo());
+window.addEventListener('pageshow',event=>{if(event.persisted)enterDemo();});
+resize();motionLabel();enterDemo();invalidate();
 </script>
 </body>
 </html>
